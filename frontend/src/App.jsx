@@ -207,6 +207,9 @@ export default function App() {
                     <label>Relay via:</label>
                     <select value={relayIp} onChange={(e) => setRelayIp(e.target.value)}>
                       <option value="">Select attacker machine…</option>
+                      {selfInfo && (
+                        <option value={selfInfo.ip}>Self (Simulate Attacker on this machine)</option>
+                      )}
                       {peers.filter((p) => p.ip !== targetIp).map((p) => (
                         <option key={p.ip} value={p.ip}>
                           {p.name} ({p.ip})
