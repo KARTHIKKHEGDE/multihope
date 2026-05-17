@@ -85,10 +85,24 @@ export default function App() {
     if (!message.trim() || !targetIp) return;
     setBusy(true);
     setSendResult(null);
+
+    const targetPeerObj = peers.find((p) => p.ip === targetIp);
+    const targetSocketPort = targetPeerObj?.socketPort || 5010;
+
+    let relaySocketPort = 5010;
+    if (relayIp) {
+      if (selfInfo && relayIp === selfInfo.ip) {
+        relaySocketPort = selfInfo.socketPort || 5010;
+      } else {
+        const relayPeerObj = peers.find((p) => p.ip === relayIp);
+        relaySocketPort = relayPeerObj?.socketPort || 5010;
+      }
+    }
+
     try {
       const result = await sendToPeer(
-        message.trim(), targetIp, 5000,
-        attackMode, relayIp || "", 5000
+        message.trim(), targetIp, targetSocketPort,
+        attackMode, relayIp || "", relaySocketPort
       );
       setSendResult(result);
       setMessage("");

@@ -22,7 +22,13 @@ def get_peers() -> list[dict]:
         for ip in stale:
             del _peers[ip]
         return [
-            {"name": p["name"], "ip": p["ip"], "port": p["port"], "relay": p.get("relay", False)}
+            {
+                "name": p["name"],
+                "ip": p["ip"],
+                "port": p["port"],
+                "socketPort": p.get("socketPort", config.PEER_SOCKET_PORT),
+                "relay": p.get("relay", False)
+            }
             for p in _peers.values()
             if p["ip"] != config.LOCAL_IP
         ]
@@ -38,6 +44,7 @@ def _broadcast_loop():
                 "name": config.MACHINE_NAME,
                 "ip": config.LOCAL_IP,
                 "port": config.API_PORT,
+                "socketPort": config.PEER_SOCKET_PORT,
             }).encode("utf-8")
             sock.sendto(message, ("<broadcast>", config.DISCOVERY_PORT))
         except Exception:
