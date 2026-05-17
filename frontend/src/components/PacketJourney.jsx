@@ -17,7 +17,7 @@ const phaseConfig = {
   bb84: { label: "Key Exchange (BB84)", Icon: Key, color: "teal" },
   "aes-encrypt": { label: "Encrypt (AES-CBC)", Icon: Lock, color: "amber" },
   "aes-decrypt": { label: "Decrypt (AES-CBC)", Icon: Unlock, color: "blue" },
-  "attack-detected": { label: "Attack Detected!", Icon: ShieldAlert, color: "red" },
+  "attack-detected": { label: "Attack Detected", Icon: ShieldAlert, color: "red" },
 };
 
 const nodeNames = {
@@ -27,6 +27,10 @@ const nodeNames = {
   node3: "Node 3",
   receiver: "Receiver",
 };
+
+function labelNode(value) {
+  return nodeNames[value] || value || "next hop";
+}
 
 function previewCells(value = "") {
   return String(value).split("").slice(0, 8);
@@ -44,7 +48,7 @@ function BB84MiniTable({ event }) {
 
   return (
     <div className="bb84Table" aria-label="BB84 basis table">
-      <p>QKD Sifted Key (matching bases kept):</p>
+      <p>QKD sifted key: matching bases are kept</p>
       {rows.map(([label, cells]) => (
         <div className="bb84Row" key={label}>
           <span>{label}</span>
@@ -64,29 +68,56 @@ function BB84MiniTable({ event }) {
   );
 }
 
-function StepDetail({ event }) {
-  const [expanded, setExpanded] = useState(false);
-  const phase = phaseConfig[event.phase] || phaseConfig["attack-detected"];
-
+function stepSummary(event) {
   const summaryLines = [];
+
   if (event.phase === "bb84") {
     const errPct = Math.round((event.errorRate || 0) * 100);
     const thrPct = Math.round((event.errorThreshold || 0.15) * 100);
-    summaryLines.push(`${event.matchingBases || "?"} bases matched → ${event.siftedBits || "?"} bits sifted`);
+    summaryLines.push(`${event.matchingBases || "?"} bases matched -> ${event.siftedBits || "?"} bits sifted`);
     summaryLines.push(`Error rate: ${errPct}% (limit: ${thrPct}%)`);
-    if (event.errorRate > event.errorThreshold) {
-      summaryLines.push("⚠️ Rejected — error rate exceeded threshold");
-    } else {
-      summaryLines.push("✓ Accepted — within error tolerance");
-    }
-  } else if (event.phase === "aes-encrypt" || event.phase === "aes-decrypt") {
-    const action = event.phase === "aes-decrypt" ? "Decrypted" : "Encrypted";
-    summaryLines.push(`${action} ${event.plaintextLength || "?"} characters with AES-256-CBC`);
-    summaryLines.push(`Key fingerprint: ${event.keyFingerprint || "unknown"}`);
-  } else if (event.phase === "attack-detected") {
-    summaryLines.push(`Detection: ${event.detectionReason || event.message}`);
-    if (event.blockedNode) summaryLines.push(`Node ${event.blockedNode} was blocked and routing will skip it`);
+    summaryLines.push(
+      event.errorRate > event.errorThreshold
+        ? "Rejected: checked bits disagreed too often, which indicates eavesdropping noise."
+        : "Accepted: checked bits stayed within the safe error limit."
+    );
+    if (event.keyFingerprint) summaryLines.push(`Fresh AES key fingerprint: ${event.keyFingerprint}`);
+    return summaryLines;
   }
+
+  if (event.phase === "aes-encrypt" || event.phase === "aes-decrypt") {
+    const action = event.phase === "aes-decrypt" ? "Decrypted" : "Encrypted";
+    summaryLines.push(`${action} ${event.plaintextLength || "?"} plaintext characters with AES-256-CBC`);
+    summaryLines.push(`Key fingerprint used for this hop: ${event.keyFingerprint || "unknown"}`);
+    if (event.previousHop || event.nextHop) {
+      summaryLines.push(`Route step: ${labelNode(event.previousHop)} -> ${labelNode(event.nextHop)}`);
+    }
+    if (event.hopExplanation) summaryLines.push(event.hopExplanation);
+    return summaryLines;
+  }
+
+  if (event.phase === "attack-detected") {
+    summaryLines.push(`Detection rule: ${event.detectionReason || event.message}`);
+    if (event.detectionCheckpoint) summaryLines.push(`Checked at: ${event.detectionCheckpoint}`);
+    if (event.attackMode) summaryLines.push(`Selected attack mode: ${event.attackMode}`);
+    if (event.targetNode) summaryLines.push(`Configured attack target: ${labelNode(event.targetNode)}`);
+    if (event.packetHadMitmFlag !== undefined) {
+      summaryLines.push(`MITM marker in packet: ${event.packetHadMitmFlag ? "present" : "absent"}`);
+    }
+    if (event.inspectedAtTarget !== undefined) {
+      summaryLines.push(`This node is the selected target: ${event.inspectedAtTarget ? "yes" : "no"}`);
+    }
+    if (event.blockedNode) summaryLines.push(`${labelNode(event.blockedNode)} was blocked, so the route stops here.`);
+    return summaryLines;
+  }
+
+  return summaryLines;
+}
+
+function StepDetail({ event }) {
+  const [expanded, setExpanded] = useState(event.phase === "attack-detected");
+  const phase = phaseConfig[event.phase] || phaseConfig["attack-detected"];
+  const summaryLines = stepSummary(event);
 
   return (
     <div className={`journeyStepDetail ${phase.color}`}>
@@ -102,25 +133,38 @@ function StepDetail({ event }) {
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
       </div>
+
       {summaryLines.length > 0 && (
         <ul className="journeyStepSummary">
           {summaryLines.map((line, i) => (
-            <li key={i}>{line}</li>
+            <li key={`${line}-${i}`}>{line}</li>
           ))}
         </ul>
       )}
+
       {expanded && (
         <div className="journeyStepExpanded">
           {event.phase === "bb84" && <BB84MiniTable event={event} />}
-          {(event.ivPreview || event.ciphertextPreview) && (
+          {(event.ivPreview || event.ciphertextPreview || event.decryptedPreview) && (
             <div className="technicalDetails">
-              {event.ivPreview && <code>IV: {event.ivPreview}…</code>}
-              {event.ciphertextPreview && <code>Cipher: {event.ciphertextPreview}…</code>}
+              {event.ivPreview && <code>IV: {event.ivPreview}...</code>}
+              {event.ciphertextPreview && <code>Cipher: {event.ciphertextPreview}...</code>}
+              {event.decryptedPreview && <code>Plaintext preview: {event.decryptedPreview}</code>}
             </div>
           )}
           {event.noncePreview && (
             <div className="technicalDetails">
-              <code>Nonce: {event.noncePreview}…</code>
+              <code>Nonce: {event.noncePreview}...</code>
+            </div>
+          )}
+          {event.detectionEvidence?.length > 0 && (
+            <div className="evidenceList">
+              <strong>How the MITM was caught</strong>
+              <ol>
+                {event.detectionEvidence.map((line, index) => (
+                  <li key={`${line}-${index}`}>{line}</li>
+                ))}
+              </ol>
             </div>
           )}
         </div>
@@ -143,21 +187,26 @@ function OutcomeBanner({ events }) {
         <CheckCircle2 size={22} />
         <div>
           <strong>Message Delivered Successfully</strong>
-          <p>Packet traversed all hops securely via BB84 key exchange at each hop.</p>
+          <p>Every hop decrypted only its incoming layer, created a fresh BB84-derived AES key, and encrypted for the next hop.</p>
         </div>
       </div>
     );
   }
 
   if (isBlocked) {
-    const reason = attackEvents[0]?.detectionReason || attackEvents[0]?.message || "Attack detected";
-    const blockedAt = attackEvents[0]?.source || "unknown node";
+    const attack = attackEvents[0];
+    const reason = attack?.detectionReason || attack?.message || "Attack detected";
+    const blockedAt = attack?.blockedNode || attack?.source || "unknown node";
+    const mitmCopy = attack?.packetHadMitmFlag
+      ? "The packet carried the MITM marker at the selected target node, so it was blocked before AES decryption."
+      : "The node failed one of the security checks, so it was blocked before the route continued.";
+
     return (
       <div className="outcomeBanner blocked">
         <XCircle size={22} />
         <div>
-          <strong>Attack Detected & Blocked at {nodeNames[blockedAt] || blockedAt}</strong>
-          <p>{reason} — The compromised node was removed from the routing table.</p>
+          <strong>Attack Detected and Blocked at {labelNode(blockedAt)}</strong>
+          <p>{reason}. {mitmCopy}</p>
         </div>
       </div>
     );
@@ -166,7 +215,7 @@ function OutcomeBanner({ events }) {
   return null;
 }
 
-export default function PacketJourney({ events, attackMode }) {
+export default function PacketJourney({ events }) {
   const stageEvents = useMemo(
     () => events.filter((e) => e.phase || e.status === "attack"),
     [events]

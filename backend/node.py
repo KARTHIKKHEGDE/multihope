@@ -44,6 +44,8 @@ def _log_bb84(node_name: str, result: bb84.BB84Result) -> None:
 def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, object] | None:
     mode = attack_detector.get_attack_mode()
     is_target = attack_detector.is_target_node(node_name)
+    previous_hop = str(packet.get("route", ["sender"])[-1])
+    next_hop = router.get_next_hop(node_name)
 
     # Only apply eavesdrop distortion on the targeted node
     eavesdrop_here = mode == "eavesdrop" and is_target
@@ -78,6 +80,21 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
             "attack",
             phase="attack-detected",
             detectionReason=detection.reason,
+            attackMode=mode,
+            targetNode=attack_detector.get_target_node(),
+            packetHadMitmFlag=bool(packet.get("mitm")),
+            inspectedAtTarget=is_target,
+            previousHop=previous_hop,
+            nextHop=next_hop,
+            detectionCheckpoint="before AES decrypt",
+            detectionEvidence=[
+                f"Packet arrived at {node_name} from {previous_hop}.",
+                f"Dashboard target node is {attack_detector.get_target_node()}. This node {'matches' if is_target else 'does not match'} that target.",
+                f"Packet MITM marker is {'present' if bool(packet.get('mitm')) else 'absent'}.",
+                f"Nonce preview {str(packet['nonce'])[:12]}... was checked before decryption.",
+                f"BB84 error rate was {round(key_result.error_rate * 100)}%, so this was not blocked because of eavesdropping noise.",
+                "Because the MITM marker was present at the targeted node, the node refused to decrypt and the router blocked this hop.",
+            ],
             errorRate=key_result.error_rate,
             errorThreshold=config.ERROR_THRESHOLD,
             noncePreview=str(packet["nonce"])[:12],
@@ -95,6 +112,13 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
         ivPreview=packet["payload"]["iv"][:12],
         ciphertextPreview=packet["payload"]["ciphertext"][:16],
         keyFingerprint=_key_fingerprint(packet["key"]),
+        previousHop=previous_hop,
+        nextHop=next_hop,
+        decryptedPreview=plaintext[:24],
+        hopExplanation=(
+            f"{node_name} used the AES key from {previous_hop} to open the packet, "
+            "recover the plaintext inside this hop, and prepare it for re-encryption."
+        ),
     )
 
     # If MITM mode and this is the target, store intercepted data for the challenge
@@ -119,6 +143,12 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
         ivPreview=next_payload["iv"][:12],
         ciphertextPreview=next_payload["ciphertext"][:16],
         keyFingerprint=_key_fingerprint(next_key),
+        previousHop=node_name,
+        nextHop=next_hop,
+        hopExplanation=(
+            f"{node_name} generated a fresh BB84-derived AES key and encrypted the same plaintext "
+            f"for {next_hop or 'the next route entry'}."
+        ),
     )
     logger.emit_event(node_name, "Forwarded encrypted packet", "success", errorRate=key_result.error_rate)
     return {
