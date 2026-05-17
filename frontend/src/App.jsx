@@ -24,41 +24,102 @@ function getReceiverResult(sendResult) {
   return sendResult?.result?.result || sendResult?.result || sendResult;
 }
 
+function NodeCrypto({ step, crypto }) {
+  const nodeCrypto = step.crypto || {};
+  const bb84 = nodeCrypto.bb84 || {};
+  if (nodeCrypto.action) {
+    return (
+      <div className="nodeCrypto">
+        {nodeCrypto.decryptedPreview && <p><span>Decrypted</span><code>{nodeCrypto.decryptedPreview}</code></p>}
+        {nodeCrypto.plaintextPreview && <p><span>Plaintext</span><code>{nodeCrypto.plaintextPreview}</code></p>}
+        {nodeCrypto.aesKeyFingerprint && <p><span>New AES key</span><code>{nodeCrypto.aesKeyFingerprint}... ({nodeCrypto.aesKeyLengthBits} bits)</code></p>}
+        {nodeCrypto.ivPreview && <p><span>New IV</span><code>{nodeCrypto.ivPreview}...</code></p>}
+        {nodeCrypto.ciphertextPreview && <p><span>New ciphertext</span><code>{nodeCrypto.ciphertextPreview}...</code></p>}
+        {nodeCrypto.payload?.ciphertext && <p><span>Incoming ciphertext</span><code>{nodeCrypto.payload.ciphertext.slice(0, 40)}...</code></p>}
+        {bb84.aliceBasisPreview && <p><span>BB84 bases</span><code>Alice {bb84.aliceBasisPreview} | Bob {bb84.bobBasisPreview}</code></p>}
+        {bb84.aliceBitPreview && <p><span>Bits</span><code>Alice {bb84.aliceBitPreview} | Bob {bb84.bobBitPreview}</code></p>}
+        {bb84.keepPreview && <p><span>Keep / sifted</span><code>{bb84.keepPreview} / {bb84.siftedPreview}</code></p>}
+        {bb84.matchingBases && <p><span>BB84 counts</span><code>{bb84.matchingBases} matching, {bb84.siftedBits} sifted, {bb84.comparedBits} compared</code></p>}
+        {bb84.errorRate !== undefined && <p><span>Error rate</span><code>{Math.round((bb84.errorRate || 0) * 100)}% / {Math.round((bb84.errorThreshold || 0.15) * 100)}%</code></p>}
+        {nodeCrypto.nonce && <p><span>Nonce</span><code>{nodeCrypto.nonce.slice(0, 24)}...</code></p>}
+        {nodeCrypto.mode && <p><span>Mode seen</span><code>{nodeCrypto.mode}</code></p>}
+        {nodeCrypto.blockedReason && <p><span>Blocked reason</span><code>{nodeCrypto.blockedReason}</code></p>}
+        {nodeCrypto.note && <p><span>What happened</span><code>{nodeCrypto.note}</code></p>}
+      </div>
+    );
+  }
+
+  if (!crypto?.nonce) return null;
+  const sender = crypto.senderBB84 || {};
+  const receiver = crypto.receiverBB84 || {};
+  const node = (step.node || "").toLowerCase();
+
+  if (node.includes("sender")) {
+    return (
+      <div className="nodeCrypto">
+        <p><span>Plaintext</span><code>{crypto.senderPlaintextPreview || crypto.plaintextPreview || "message typed by sender"}</code></p>
+        <p><span>AES key</span><code>{crypto.aesKeyFingerprint}... ({crypto.aesKeyLengthBits} bits)</code></p>
+        <p><span>IV</span><code>{crypto.ivPreview}...</code></p>
+        <p><span>Ciphertext</span><code>{crypto.ciphertextPreview}...</code></p>
+        <p><span>BB84 bases</span><code>Alice {sender.aliceBasisPreview} | Bob {sender.bobBasisPreview}</code></p>
+        <p><span>Bits</span><code>Alice {sender.aliceBitPreview} | Bob {sender.bobBitPreview}</code></p>
+        <p><span>Keep / sifted</span><code>{sender.keepPreview} / {sender.siftedPreview}</code></p>
+      </div>
+    );
+  }
+
+  if (node.includes("hop")) {
+    return (
+      <div className="nodeCrypto">
+        <p><span>Packet state</span><code>Encrypted only; hop cannot read plaintext</code></p>
+        <p><span>Carrying</span><code>nonce {crypto.nonce.slice(0, 16)}... + ciphertext {crypto.ciphertextPreview}...</code></p>
+      </div>
+    );
+  }
+
+  if (node.includes("receiver check")) {
+    return (
+      <div className="nodeCrypto">
+        <p><span>Nonce check</span><code>{crypto.nonce.slice(0, 24)}...</code></p>
+        <p><span>Mode seen</span><code>{crypto.attackMode || "normal"}</code></p>
+      </div>
+    );
+  }
+
+  if (node.includes("receiver")) {
+    return (
+      <div className="nodeCrypto">
+        <p><span>Receiver BB84 bases</span><code>Alice {receiver.aliceBasisPreview} | Bob {receiver.bobBasisPreview}</code></p>
+        <p><span>Receiver bits</span><code>Alice {receiver.aliceBitPreview} | Bob {receiver.bobBitPreview}</code></p>
+        <p><span>Keep / sifted</span><code>{receiver.keepPreview} / {receiver.siftedPreview}</code></p>
+        <p><span>BB84 counts</span><code>{receiver.matchingBases} matching, {receiver.siftedBits} sifted, {receiver.comparedBits} compared</code></p>
+        <p><span>Error rate</span><code>{Math.round((receiver.errorRate || 0) * 100)}% / {Math.round((receiver.errorThreshold || 0.15) * 100)}%</code></p>
+        <p><span>Decryption</span><code>{crypto.decrypted ? `Plaintext: ${crypto.plaintextPreview}` : `Blocked: ${crypto.blockedReason}`}</code></p>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function SendExplanation({ sendResult }) {
   if (!sendResult) return null;
   const receiverResult = getReceiverResult(sendResult);
   const steps = receiverResult?.routeSteps || [];
   const crypto = receiverResult?.cryptoDetails || {};
-  const senderBB84 = crypto.senderBB84 || {};
-  const receiverBB84 = crypto.receiverBB84 || {};
   const blocked = receiverResult?.attackDetected || receiverResult?.ok === false;
 
   return (
     <div className={`sendExplanation ${blocked ? "blocked" : "delivered"}`}>
       <strong>{blocked ? "Receiver blocked the message" : "Receiver accepted the message"}</strong>
       {receiverResult?.attackType && <p>{receiverResult.attackType}</p>}
-      {crypto.nonce && (
-        <div className="cryptoDetails">
-          <div><span>Nonce</span><code>{crypto.nonce.slice(0, 24)}...</code></div>
-          <div><span>AES key</span><code>{crypto.aesKeyFingerprint}... ({crypto.aesKeyLengthBits} bits)</code></div>
-          <div><span>IV</span><code>{crypto.ivPreview}...</code></div>
-          <div><span>Ciphertext</span><code>{crypto.ciphertextPreview}...</code></div>
-          <div><span>Decryption</span><code>{crypto.decrypted ? `Plaintext: ${crypto.plaintextPreview}` : `Blocked: ${crypto.blockedReason}`}</code></div>
-          <div><span>Sender bases</span><code>Alice {senderBB84.aliceBasisPreview} | Bob {senderBB84.bobBasisPreview}</code></div>
-          <div><span>Receiver bases</span><code>Alice {receiverBB84.aliceBasisPreview} | Bob {receiverBB84.bobBasisPreview}</code></div>
-          <div><span>Keep mask</span><code>{receiverBB84.keepPreview}</code></div>
-          <div><span>Bits</span><code>Alice {receiverBB84.aliceBitPreview} | Bob {receiverBB84.bobBitPreview}</code></div>
-          <div><span>Sifted key bits</span><code>{receiverBB84.siftedPreview}</code></div>
-          <div><span>BB84 counts</span><code>{receiverBB84.matchingBases} matching, {receiverBB84.siftedBits} sifted, {receiverBB84.comparedBits} compared</code></div>
-          <div><span>Error rate</span><code>{Math.round((receiverBB84.errorRate || 0) * 100)}% / {Math.round((receiverBB84.errorThreshold || 0.15) * 100)}%</code></div>
-        </div>
-      )}
       {steps.length > 0 && (
         <ol>
           {steps.map((step, index) => (
             <li key={`${step.node}-${index}`}>
               <span>{index + 1}. {step.node}</span>
               <p>{step.detail}</p>
+              <NodeCrypto step={step} crypto={crypto} />
             </li>
           ))}
         </ol>

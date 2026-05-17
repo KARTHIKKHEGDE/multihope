@@ -200,12 +200,150 @@ def _crypto_details(
         "aesKeyLengthBits": len(key_hex) * 4 if key_hex else 0,
         "ivPreview": str(payload.get("iv", ""))[:24],
         "ciphertextPreview": str(payload.get("ciphertext", ""))[:40],
+        "senderPlaintextPreview": packet.get("routeMeta", {}).get("senderPlaintextPreview", ""),
         "plaintextPreview": plaintext[:80] if decrypted else "",
         "decrypted": decrypted,
         "blockedReason": blocked_reason,
         "senderBB84": sender_bb84,
         "receiverBB84": receiver_bb84,
+        "nodeRouteSteps": packet.get("routeMeta", {}).get("nodeRouteSteps", []),
     }
+
+
+def _packet_crypto(
+    *,
+    action: str,
+    plaintext: str,
+    payload: dict,
+    key: bytes,
+    bb84_result: bb84.BB84Result,
+    decrypted_plaintext: str = "",
+    note: str = "",
+) -> dict:
+    return {
+        "action": action,
+        "plaintextPreview": plaintext[:80],
+        "decryptedPreview": decrypted_plaintext[:80],
+        "aesKeyFingerprint": key.hex()[:12],
+        "aesKeyLengthBits": len(key) * 8,
+        "ivPreview": str(payload.get("iv", ""))[:24],
+        "ciphertextPreview": str(payload.get("ciphertext", ""))[:40],
+        "bb84": _bb84_details(bb84_result),
+        "note": note,
+    }
+
+
+def _simulate_multihop_packet(message: str, attack_mode: str, nonce: str) -> tuple[dict, list[dict], int | None]:
+    virtual_hops = [
+        {"number": 1, "name": "Hop 1", "ip": "virtual-hop-1"},
+        {"number": 2, "name": "Hop 2", "ip": "virtual-hop-2"},
+        {"number": 3, "name": "Hop 3", "ip": "virtual-hop-3"},
+    ]
+    attack_hop = randbelow(3) + 1 if attack_mode == "mitm" else None
+    steps: list[dict] = []
+
+    current_plaintext = message
+    current_key_result = bb84.establish_key()
+    current_payload = crypto_utils.encrypt_message(current_plaintext, current_key_result.key)
+    current_key = current_key_result.key
+    blocked = False
+
+    steps.append({
+        "node": "Sender laptop",
+        "name": config.MACHINE_NAME,
+        "ip": config.LOCAL_IP,
+        "status": "success",
+        "title": "Encrypt for Hop 1",
+        "detail": "Sender runs BB84, derives a fresh AES key, and encrypts the plaintext for the first hop.",
+        "crypto": _packet_crypto(
+            action="encrypt",
+            plaintext=current_plaintext,
+            payload=current_payload,
+            key=current_key,
+            bb84_result=current_key_result,
+            note="Outbound packet: Sender -> Hop 1",
+        ),
+    })
+
+    for hop in virtual_hops:
+        hop_number = int(hop["number"])
+        decrypted = crypto_utils.decrypt_message(current_payload, current_key)
+        hop_attacked = attack_mode == "mitm" and hop_number == attack_hop
+
+        if hop_attacked:
+            steps.append({
+                "node": f"Hop {hop_number}",
+                "name": hop["name"],
+                "ip": hop["ip"],
+                "status": "attack",
+                "title": "Decrypt, then MITM detected",
+                "detail": (
+                    f"Hop {hop_number} decrypted the incoming packet, but MITM was detected here. "
+                    "The route is marked unsafe and later nodes must not trust/decrypt it."
+                ),
+                "crypto": _packet_crypto(
+                    action="decrypt-block",
+                    plaintext=decrypted,
+                    payload=current_payload,
+                    key=current_key,
+                    bb84_result=current_key_result,
+                    decrypted_plaintext=decrypted,
+                    note="Incoming packet decrypted; re-encryption stopped because this hop is attacked.",
+                ),
+            })
+            blocked = True
+            break
+
+        next_name = "Receiver" if hop_number == 3 else f"Hop {hop_number + 1}"
+        next_key_result = bb84.establish_key(
+            eavesdrop=attack_mode == "eavesdrop",
+            bit_flip_rate=config.EAVESDROP_BIT_FLIP_RATE if attack_mode == "eavesdrop" else 0.0,
+        )
+        next_payload = crypto_utils.encrypt_message(decrypted, next_key_result.key)
+        steps.append({
+            "node": f"Hop {hop_number}",
+            "name": hop["name"],
+            "ip": hop["ip"],
+            "status": "warning" if attack_mode in ("eavesdrop", "replay") else "success",
+            "title": f"Decrypt and re-encrypt for {next_name}",
+            "detail": (
+                f"Hop {hop_number} decrypts the packet with the previous AES key, then runs BB84 again "
+                f"and re-encrypts the same plaintext for {next_name}."
+            ),
+            "crypto": _packet_crypto(
+                action="decrypt-reencrypt",
+                plaintext=decrypted,
+                payload=next_payload,
+                key=next_key_result.key,
+                bb84_result=next_key_result,
+                decrypted_plaintext=decrypted,
+                note=f"Outbound packet: Hop {hop_number} -> {next_name}",
+            ),
+        })
+        current_plaintext = decrypted
+        current_payload = next_payload
+        current_key = next_key_result.key
+        current_key_result = next_key_result
+
+    route_meta = {
+        "attackMode": attack_mode,
+        "senderPlaintextPreview": message[:80],
+        "virtualHops": virtual_hops,
+        "attackHop": attack_hop,
+        "nodeRouteSteps": steps,
+        "finalBlockedInRoute": blocked,
+        "finalBb84": _bb84_details(current_key_result),
+    }
+    packet = {
+        "payload": current_payload,
+        "key": current_key.hex(),
+        "nonce": nonce,
+        "timestamp": time.time(),
+        "route": [config.MACHINE_NAME, "Hop 1", "Hop 2", "Hop 3"],
+        "errorRate": current_key_result.error_rate,
+        "routeMeta": route_meta,
+    }
+    return packet, steps, attack_hop
 
 
 def _send_envelope(host: str, port: int, envelope: dict) -> dict:
@@ -242,45 +380,24 @@ def send_message_to_peer(
     Public API called by Flask when user clicks "Send Securely".
     Builds the BB84 packet, picks the routing strategy, delivers via raw TCP.
     """
-    # BB84 key exchange + AES encrypt
-    key_result = bb84.establish_key()
-    payload = crypto_utils.encrypt_message(message, key_result.key)
-    virtual_hops = [
-        {"number": 1, "name": "Network hop 1", "ip": "virtual-hop-1"},
-        {"number": 2, "name": "Network hop 2", "ip": "virtual-hop-2"},
-        {"number": 3, "name": "Network hop 3", "ip": "virtual-hop-3"},
-    ]
-    attack_hop = randbelow(3) + 1 if attack_mode == "mitm" else None
-
-    packet = {
-        "payload": payload,
-        "key": key_result.key.hex(),
-        "nonce": token_hex(16),
-        "timestamp": time.time(),
-        "route": [config.MACHINE_NAME],
-        "errorRate": key_result.error_rate,
-        "routeMeta": {
-            "targetIp": target_ip,
-            "attackMode": attack_mode,
-            "senderPlaintextPreview": message[:80],
-            "senderBb84": _bb84_details(key_result),
-            "virtualHops": virtual_hops,
-            "attackHop": attack_hop,
-        },
-    }
+    nonce = token_hex(16)
+    packet, route_steps, attack_hop = _simulate_multihop_packet(message, attack_mode, nonce)
+    key_fingerprint = str(packet.get("key", ""))[:12]
+    payload = packet.get("payload", {})
 
     logger.emit_event(
         "sender",
-        f"[SEND] -> {target_ip}:{target_port}  mode={attack_mode}  key={key_result.key.hex()[:12]}",
+        f"[SEND] -> {target_ip}:{target_port}  mode={attack_mode}  key={key_fingerprint}",
         "info",
         phase="aes-encrypt",
-        errorRate=key_result.error_rate,
-        keyFingerprint=key_result.key.hex()[:12],
+        errorRate=packet.get("errorRate", 0),
+        keyFingerprint=key_fingerprint,
         plaintextLength=len(message),
-        ivPreview=payload["iv"][:12],
-        ciphertextPreview=payload["ciphertext"][:16],
-        virtualHops=virtual_hops,
+        ivPreview=str(payload.get("iv", ""))[:12],
+        ciphertextPreview=str(payload.get("ciphertext", ""))[:16],
+        virtualHops=packet.get("routeMeta", {}).get("virtualHops", []),
         attackHop=attack_hop,
+        routeSteps=route_steps,
     )
 
     # Route via MITM relay if attacker machine is specified
@@ -390,23 +507,56 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             f"{round(config.ERROR_THRESHOLD * 100)}% threshold"
         )
 
-    route_steps = _build_route_steps(
-        attack_mode=attack_mode,
-        sender_name=sender_name,
-        sender_ip=sender_ip,
-        target_name=config.MACHINE_NAME,
-        target_ip=config.LOCAL_IP,
-        virtual_hops=virtual_hops,
-        attack_hop=attack_hop,
-        nonce=nonce,
-        nonce_ok=nonce_result.ok,
-        error_rate=error_rate,
-        attack_detected=attack_detected,
-        attack_type=attack_type,
-        bb84_details=bb84_details,
-    )
+    route_steps = list(route_meta.get("nodeRouteSteps") or [])
+    if not route_steps:
+        route_steps = _build_route_steps(
+            attack_mode=attack_mode,
+            sender_name=sender_name,
+            sender_ip=sender_ip,
+            target_name=config.MACHINE_NAME,
+            target_ip=config.LOCAL_IP,
+            virtual_hops=virtual_hops,
+            attack_hop=attack_hop,
+            nonce=nonce,
+            nonce_ok=nonce_result.ok,
+            error_rate=error_rate,
+            attack_detected=attack_detected,
+            attack_type=attack_type,
+            bb84_details=bb84_details,
+        )
+    route_steps.append({
+        "node": "Receiver check",
+        "name": config.MACHINE_NAME,
+        "ip": config.LOCAL_IP,
+        "status": "success" if nonce_result.ok else "attack",
+        "title": "Nonce and mode check",
+        "detail": (
+            f"Receiver checks nonce {nonce[:12]}... and mode={attack_mode}. "
+            f"Nonce is {'fresh' if nonce_result.ok else 'a duplicate'}."
+        ),
+        "crypto": {
+            "action": "inspect",
+            "nonce": nonce,
+            "mode": attack_mode,
+            "note": "Replay detection happens before final decryption.",
+        },
+    })
 
     if attack_detected:
+        route_steps.append({
+            "node": "Receiver laptop",
+            "name": config.MACHINE_NAME,
+            "ip": config.LOCAL_IP,
+            "status": "attack",
+            "title": "Blocked before final decryption",
+            "detail": f"Receiver refuses to decrypt because: {attack_type}.",
+            "crypto": {
+                "action": "blocked",
+                "blockedReason": attack_type,
+                "bb84": bb84_details,
+                "note": "No plaintext is released at receiver.",
+            },
+        })
         crypto_details = _crypto_details(
             packet=packet,
             receiver_bb84=bb84_details,
@@ -464,6 +614,24 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         plaintext = crypto_utils.decrypt_message(packet["payload"], key_bytes)
     except Exception as exc:
         return {"ok": False, "error": f"Decryption failed: {exc}"}
+
+    route_steps.append({
+        "node": "Receiver laptop",
+        "name": config.MACHINE_NAME,
+        "ip": config.LOCAL_IP,
+        "status": "success",
+        "title": "Final decrypt",
+        "detail": "Receiver decrypts the final Hop 3 -> Receiver packet and recovers the original plaintext.",
+        "crypto": {
+            "action": "decrypt-final",
+            "decryptedPreview": plaintext[:80],
+            "payload": packet.get("payload", {}),
+            "aesKeyFingerprint": str(packet.get("key", ""))[:12],
+            "aesKeyLengthBits": len(str(packet.get("key", ""))) * 4,
+            "bb84": packet.get("routeMeta", {}).get("finalBb84", bb84_details),
+            "note": "Inbound packet: Hop 3 -> Receiver",
+        },
+    })
 
     crypto_details = _crypto_details(
         packet=packet,
