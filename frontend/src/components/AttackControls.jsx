@@ -1,20 +1,19 @@
-import { useState } from "react";
-import { Shield, RadioTower, Repeat, UserRoundX, AlertTriangle, Info, Terminal, KeyRound } from "lucide-react";
-import { setAttackMode, submitMitmGuess } from "../api/client.js";
+import { Shield, RadioTower, Repeat, UserRoundX, AlertTriangle, Info } from "lucide-react";
+import { setAttackMode } from "../api/client.js";
 
 const modes = [
   {
     id: "normal",
     label: "Normal",
     Icon: Shield,
-    description: "Secure transmission — BB84 keys are exchanged honestly, no interference.",
+    description: "Secure transmission - BB84 keys are exchanged honestly, no interference.",
     color: "teal",
   },
   {
     id: "mitm",
     label: "MITM",
     Icon: UserRoundX,
-    description: "Man-in-the-Middle — attacker relay forwards the packet; receiver blocks it from relay metadata before decrypting.",
+    description: "Man-in-the-Middle - attacker relay forwards the packet; receiver blocks it from relay metadata before decrypting.",
     color: "red",
   },
   {
@@ -28,7 +27,7 @@ const modes = [
     id: "replay",
     label: "Replay",
     Icon: Repeat,
-    description: "Attacker re-sends a previously captured packet — detected by nonce duplication.",
+    description: "Attacker re-sends a previously captured packet - detected by nonce duplication.",
     color: "purple",
   },
 ];
@@ -39,10 +38,7 @@ const nodes = [
   { id: "node3", label: "Node 3" },
 ];
 
-export default function AttackControls({ currentMode, targetNode, intercepted, onChange }) {
-  const [guess, setGuess] = useState("");
-  const [mitmResult, setMitmResult] = useState(null);
-
+export default function AttackControls({ currentMode, targetNode, onChange }) {
   async function chooseMode(mode) {
     await setAttackMode(mode, targetNode);
     await onChange();
@@ -52,13 +48,6 @@ export default function AttackControls({ currentMode, targetNode, intercepted, o
     const newTarget = event.target.value;
     await setAttackMode(currentMode, newTarget);
     await onChange();
-  }
-
-  async function handleGuess(e) {
-    e.preventDefault();
-    if (!guess.trim()) return;
-    const result = await submitMitmGuess(guess.trim());
-    setMitmResult(result);
   }
 
   const activeMode = modes.find((m) => m.id === currentMode) || modes[0];
@@ -104,46 +93,6 @@ export default function AttackControls({ currentMode, targetNode, intercepted, o
         <Info size={14} />
         <p>{activeMode.description}</p>
       </div>
-
-      {currentMode === "mitm" && (
-        <div className="mitmChallenge">
-          <div style={{ padding: "16px" }}>
-            <div className="mitmChallengeHeader">
-              <Terminal size={18} /> MITM Interception Challenge
-            </div>
-            
-            {intercepted ? (
-              <>
-                <div className="mitmData">
-                  <p><strong>Intercepted at:</strong> {intercepted.node}</p>
-                  <p><strong>Ciphertext:</strong> <code>{intercepted.ciphertextPreview}...</code></p>
-                  <p><strong>IV:</strong> <code>{intercepted.ivPreview}...</code></p>
-                </div>
-                
-                <form className="mitmGuessForm" onSubmit={handleGuess}>
-                  <input 
-                    placeholder="Enter 256-bit hex key guess..." 
-                    value={guess}
-                    onChange={(e) => setGuess(e.target.value)}
-                  />
-                  <button type="submit"><KeyRound size={16} /> Decrypt</button>
-                </form>
-
-                {mitmResult && (
-                  <div className={`mitmResult ${mitmResult.success ? "success" : "fail"}`}>
-                    {mitmResult.success ? "✅ " : "❌ "}
-                    {mitmResult.message}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                Waiting to intercept a packet... Send a message to capture data.
-              </p>
-            )}
-          </div>
-        </div>
-      )}
     </section>
   );
 }

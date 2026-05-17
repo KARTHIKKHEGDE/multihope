@@ -38,16 +38,6 @@ export async function setAttackMode(mode, targetNode) {
   );
 }
 
-export async function submitMitmGuess(keyGuess) {
-  return readJson(
-    await fetch("/api/mitm-attempt", {
-      method: "POST",
-      headers: jsonHeaders,
-      body: JSON.stringify({ keyGuess }),
-    })
-  );
-}
-
 export async function resetDemo() {
   return readJson(await fetch("/api/reset", { method: "POST" }));
 }

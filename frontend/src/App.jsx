@@ -146,7 +146,6 @@ export default function App() {
   const [statuses, setStatuses] = useState({});
   const [simAttackMode, setSimAttackMode] = useState("normal");
   const [targetNode, setTargetNode] = useState("node1");
-  const [intercepted, setIntercepted] = useState(null);
 
   // Tab state
   const [activeTab, setActiveTab] = useState("network");
@@ -164,7 +163,6 @@ export default function App() {
         setStatuses(statusData.nodes);
         setSimAttackMode(statusData.attackMode || "normal");
         setTargetNode(statusData.targetNode || "node1");
-        setIntercepted(statusData.intercepted || null);
       }
       if (statusData?.self) setSelfInfo(statusData.self);
       if (peerData?.self) setSelfInfo(peerData.self);
@@ -392,7 +390,6 @@ export default function App() {
               <AttackControls
                 currentMode={simAttackMode}
                 targetNode={targetNode}
-                intercepted={intercepted}
                 onChange={refreshAll}
               />
             </section>
