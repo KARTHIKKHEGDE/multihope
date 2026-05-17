@@ -33,7 +33,13 @@ if not exist "%FRONTEND_DIR%\node_modules" (
     )
 )
 
-echo [1/2] Starting Backend (Flask) on http://127.0.0.1:5000 ...
+:: Install Python deps (in case new ones were added)
+echo [INFO] Installing Python dependencies...
+cd /d "%PROJECT_ROOT%"
+call "%VENV_ACTIVATE%" && pip install -r requirements.txt -q
+
+echo.
+echo [1/2] Starting Backend (Flask) on http://0.0.0.0:5000 ...
 start "QuantumHop - Backend" cmd /k "cd /d "%PROJECT_ROOT%" && call "%VENV_ACTIVATE%" && python -m backend.app"
 
 :: Small delay to let backend start first
@@ -45,9 +51,19 @@ start "QuantumHop - Frontend" cmd /k "cd /d "%FRONTEND_DIR%" && npm run dev"
 echo.
 echo ============================================
 echo  Both servers are starting in new windows!
-echo  Backend  : http://127.0.0.1:5000
+echo  Backend  : http://0.0.0.0:5000
 echo  Frontend : http://localhost:5173
 echo ============================================
+echo.
+echo  YOUR IP : Check the backend window for your LAN IP.
+echo  PEER DISCOVERY : UDP port 5555
+echo.
+echo  IMPORTANT: Allow ports 5000 and 5555 through
+echo  Windows Firewall on ALL laptops!
+echo.
+echo  FIREWALL COMMANDS (run as admin if needed):
+echo    netsh advfirewall firewall add rule name="QuantumHop API" dir=in action=allow protocol=TCP localport=5000
+echo    netsh advfirewall firewall add rule name="QuantumHop Discovery" dir=in action=allow protocol=UDP localport=5555
 echo.
 echo Close this window or the individual server
 echo windows to stop the servers.
