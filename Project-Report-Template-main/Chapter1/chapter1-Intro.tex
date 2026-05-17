@@ -1,0 +1,52 @@
+\chapter{Introduction}
+
+The project titled \textbf{Secure File System} focuses on the design and development of a secure web-based file sharing system. The system combines user authentication, cryptographic protection, and image steganography to provide a layered approach for confidential file transfer. It is implemented as a Flask-based application in which an authenticated sender uploads a file, encrypts it, hides the encrypted payload inside a cover image, and makes it available only to the intended receiver. The receiver can then extract and decrypt the hidden payload through the application interface.
+
+\section{Introduction}
+
+Digital file sharing has become an essential part of academic, personal, and organizational communication. However, files transmitted or stored without adequate protection are vulnerable to unauthorized access, interception, tampering, and misuse. Conventional storage systems generally focus on access control, while secure communication systems usually focus only on encryption. A stronger solution can be achieved by combining multiple protection mechanisms so that even if one layer is observed, the actual file content remains protected.
+
+The Secure File System developed in this project uses a hybrid security model. The application first authenticates users through a challenge-response mechanism based on a pre-shared secret. After successful login, the sender can upload a file and choose a receiver. The uploaded file is encrypted using Advanced Encryption Standard in Galois/Counter Mode (AES-GCM), which provides confidentiality and integrity verification. The AES key is further protected using RSA public-key encryption, and the complete encrypted payload is embedded into an image using Least Significant Bit based steganography with pseudo-random pixel positions.
+
+The project is implemented using Python and Flask for the web application layer. SQLite is used to maintain file-transfer metadata such as sender, receiver, stego-image path, payload length, extraction seed, and private key information required for recovery in the prototype. The system provides separate workflows for sending, receiving, decrypting, and deleting files. This makes the application easy to use while demonstrating important security concepts such as authentication, hybrid encryption, metadata handling, and steganographic concealment.
+
+Unlike a normal file upload system, the stored output is not the original file or a directly visible encrypted file. Instead, the encrypted file data is concealed inside an image, making the presence of sensitive information less obvious. This improves security by combining cryptography, which protects the meaning of the data, with steganography, which hides the existence of the data.
+
+\section{Problem Statement}
+
+In many file sharing systems, uploaded files are stored or transferred in a form that can be directly accessed if the storage location, server, or communication channel is compromised. Even when password-based authentication is used, weak passwords, credential leakage, or unauthorized database access can expose sensitive files. In addition, encrypted files may still attract attention because their presence indicates that confidential information is being transmitted.
+
+The problem addressed in this project is the need for a secure file sharing mechanism that authenticates users, encrypts file contents, protects encryption keys, and conceals the encrypted payload in a cover medium. The system must allow only authorized users to send and receive files while ensuring that the original file cannot be understood or reconstructed without the required cryptographic and extraction parameters.
+
+Therefore, the project aims to design and implement a web-based Secure File System that provides authenticated access, encrypted file transfer, steganographic payload hiding, receiver-based file retrieval, and controlled decryption through a simple user interface.
+
+\section{Motivation}
+
+The motivation for this project comes from the increasing importance of secure digital communication. Students, researchers, and organizations frequently exchange documents, reports, code files, and confidential records through online systems. If such files are exposed, the impact can include privacy loss, data manipulation, intellectual property leakage, or unauthorized distribution.
+
+Encryption is a widely used method for protecting sensitive information, but encryption alone does not hide the fact that protected data exists. Steganography provides an additional layer by embedding the data inside another medium, such as an image. By combining these two techniques, the system can provide both confidentiality and concealment. This layered approach makes the project useful for understanding practical security design beyond a single algorithm.
+
+Another motivation is to build a working prototype that demonstrates how different security modules can be integrated into a complete application. The project connects web development, database management, user authentication, AES encryption, RSA key protection, and image-based steganography into a single workflow. This makes it relevant as a practical learning platform as well as a foundation for further development into a more robust secure storage or transfer system.
+
+\section{Objectives}
+
+The main objectives of the Secure File System project are as follows:
+
+\begin{itemize}
+    \item To develop a web-based file sharing application using Flask with separate sender and receiver workflows.
+    \item To implement user authentication using a challenge-response mechanism so that only valid users can access the system.
+    \item To encrypt uploaded files using AES-GCM in order to provide confidentiality and integrity protection.
+    \item To protect the AES encryption key using RSA encryption as part of a hybrid cryptographic approach.
+    \item To embed the encrypted payload into a cover image using steganography based on pseudo-random Least Significant Bit positions.
+    \item To store the metadata required for retrieval and decryption using SQLite.
+    \item To allow the intended receiver to view received stego images, extract the hidden payload, decrypt the file, and recover the original filename and content.
+    \item To provide a simple user interface for login, file upload, file reception, decryption, and deletion operations.
+\end{itemize}
+
+\section{Scope and Relevance}
+
+The scope of this project is limited to the design and implementation of a prototype secure file transfer system for registered users. The application supports file upload, encryption, steganographic embedding into a predefined cover image, storage of transfer metadata, receiver-side listing of received files, decryption, and recovery of the original file. The system demonstrates secure transfer between predefined users and stores the generated stego images in receiver-specific storage directories.
+
+The project is relevant to the fields of information security, secure communication, cryptography, and digital steganography. It shows how multiple security techniques can be combined to improve protection. AES-GCM protects the file contents, RSA protects the symmetric key, the challenge-response login improves authentication, and steganography hides the encrypted payload within an image. Together, these mechanisms create a layered security architecture suitable for academic demonstration and further enhancement.
+
+The present implementation is mainly intended for controlled environments and educational use. It can be extended in the future by adding dynamic user registration, stronger secret management, separate key storage, role-based access control, larger cover image selection, file type validation, cloud deployment, and audit logging. Thus, the project provides a practical foundation for building more advanced secure file management systems.

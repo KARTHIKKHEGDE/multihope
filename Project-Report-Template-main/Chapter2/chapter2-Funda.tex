@@ -1,0 +1,106 @@
+\chapter{Requirement Specification}
+
+Requirement specification defines what the Secure File System must perform and the conditions under which it must operate. The project is designed as a secure web-based file sharing application where users can authenticate themselves, send encrypted files, receive stego images, and decrypt files intended for them. The requirements are classified into functional requirements, non-functional requirements, hardware requirements, and software requirements.
+
+\section{Specific Requirements}
+
+The Secure File System must support secure file transfer between predefined users through a browser-based interface. The system should protect the original file content using cryptographic techniques and hide the encrypted payload inside an image. It should also maintain the metadata required for file retrieval and decryption while keeping the workflow simple for the sender and receiver.
+
+\subsection{Functional Requirements}
+
+Functional requirements describe the services and operations that the system must provide. The major functional requirements of the Secure File System are listed below.
+
+\begin{enumerate}
+    \item \textbf{User Authentication:} The system shall allow only registered users to access the application. Authentication shall be performed using a challenge-response mechanism in which the application generates a random challenge and verifies the user response using a pre-shared secret.
+
+    \item \textbf{Session Management:} After successful login, the system shall maintain the authenticated user's session. The session shall be used to identify the active user while sending, receiving, decrypting, or deleting files.
+
+    \item \textbf{File Upload:} The sender shall be able to upload a file through the web interface. The uploaded file shall be stored temporarily in the sender's storage directory before encryption and embedding.
+
+    \item \textbf{Receiver Selection:} The sender shall be able to select the intended receiver from the list of available users. The system shall prevent the sender from selecting invalid receiver information.
+
+    \item \textbf{Metadata Addition:} Before encryption, the system shall attach metadata such as the original filename to the file data. This is required so that the receiver can recover the file with its original name after decryption.
+
+    \item \textbf{AES File Encryption:} The system shall encrypt the uploaded file data using AES-GCM. This shall provide confidentiality for the file content and integrity verification during decryption.
+
+    \item \textbf{RSA Key Protection:} The AES key generated during encryption shall be protected using RSA encryption. This forms a hybrid encryption approach where AES protects the file and RSA protects the AES key.
+
+    \item \textbf{Payload Creation:} The system shall combine the RSA-encrypted AES key, nonce, authentication tag, and ciphertext into a single payload for embedding.
+
+    \item \textbf{Steganographic Embedding:} The encrypted payload shall be embedded into a cover image using Least Significant Bit based steganography. The embedding process shall use pseudo-random pixel positions generated from a seed value.
+
+    \item \textbf{Metadata Storage:} The system shall store file transfer metadata in the SQLite database. The stored metadata shall include sender, receiver, stego image path, payload length, seed value, and private key information required by the prototype for decryption.
+
+    \item \textbf{Received File Listing:} The receiver shall be able to view the list of stego images received through the application. Each received file shall be displayed with options to decrypt or delete it.
+
+    \item \textbf{Payload Extraction:} When the receiver selects the decrypt option, the system shall extract the hidden payload from the stego image using the stored payload length and seed value.
+
+    \item \textbf{File Decryption:} The system shall decrypt the AES key using RSA and then decrypt the ciphertext using AES-GCM. If the tag verification fails or the payload is corrupted, the system shall report decryption failure.
+
+    \item \textbf{File Recovery:} After successful decryption, the system shall separate the metadata from the original file data, recover the original filename, and save the decrypted file in the output directory.
+
+    \item \textbf{File Deletion:} The receiver shall be able to delete a received stego image and its corresponding database entry from the application.
+
+    \item \textbf{Logout:} The system shall provide a logout option that clears the user session and redirects the user to the login page.
+\end{enumerate}
+
+\subsection{Non-Functional Requirements}
+
+Non-functional requirements define the quality attributes and operating constraints of the system. The important non-functional requirements are as follows.
+
+\begin{enumerate}
+    \item \textbf{Security:} The system shall provide layered security through challenge-response authentication, AES-GCM encryption, RSA key protection, and image steganography.
+
+    \item \textbf{Confidentiality:} The original file content shall not be stored or transmitted in plain readable form after encryption. Unauthorized users should not be able to understand the file content from the stego image.
+
+    \item \textbf{Integrity:} The system shall use AES-GCM authentication tag verification to detect incorrect keys, corrupted ciphertext, or modified payload data during decryption.
+
+    \item \textbf{Usability:} The application shall provide a simple web interface for login, sending files, viewing received files, decrypting files, and deleting files. The workflow should be understandable for users with basic computer knowledge.
+
+    \item \textbf{Performance:} Encryption, embedding, extraction, and decryption operations should complete within a reasonable time for small and medium-sized files used in the prototype. The system shall display process logs to show the progress of each security operation.
+
+    \item \textbf{Reliability:} The system shall maintain correct metadata for every transferred file so that the receiver can extract and decrypt the payload successfully. Database entries and stored files should remain synchronized during send and delete operations.
+
+    \item \textbf{Maintainability:} The application shall be organized into separate modules for routes, database operations, AES encryption, RSA encryption, steganography, and utility functions. This modular structure makes the system easier to modify and extend.
+
+    \item \textbf{Portability:} The system shall be executable on common desktop or laptop systems that support Python, Flask, SQLite, OpenCV, NumPy, and PyCryptodome.
+
+    \item \textbf{Scalability:} The prototype shall support extension to more users, additional file formats, larger cover images, and improved key management in future versions.
+
+    \item \textbf{Error Handling:} The system shall report login failure, payload extraction failure, and decryption failure clearly so that the user can identify unsuccessful operations.
+\end{enumerate}
+
+\section{Technical Requirements}
+
+The technical requirements specify the hardware and software resources needed to develop and execute the Secure File System. Since the project is a web-based prototype, it can be developed and tested on a standard computer system.
+
+\subsection{Hardware Requirements}
+
+The recommended hardware requirements for development and testing are listed below.
+
+\begin{itemize}
+    \item Processor: Intel Core i3 or higher, or an equivalent processor.
+    \item RAM: Minimum 4 GB; 8 GB recommended for smoother execution.
+    \item Storage: Minimum 1 GB free disk space for project files, uploaded files, stego images, decrypted files, and database storage.
+    \item Display: Standard monitor with browser support for accessing the web interface.
+    \item Input Devices: Keyboard and mouse for user interaction.
+    \item Network: Localhost execution is sufficient for prototype testing; network connectivity is required only if the application is deployed for multi-system access.
+\end{itemize}
+
+\subsection{Software Requirements}
+
+The software requirements for the Secure File System are listed below.
+
+\begin{itemize}
+    \item Operating System: Windows, Linux, or macOS with Python support.
+    \item Programming Language: Python 3.
+    \item Web Framework: Flask for routing, templates, sessions, and web application handling.
+    \item Database: SQLite for storing file transfer metadata.
+    \item Cryptography Library: PyCryptodome for AES-GCM encryption, RSA key generation, RSA encryption, and RSA decryption.
+    \item Image Processing Libraries: OpenCV and NumPy for image reading, writing, flattening, random pixel selection, payload embedding, and payload extraction.
+    \item Front-End Technologies: HTML, CSS, and JavaScript for the user interface.
+    \item Browser: Any modern web browser such as Google Chrome, Microsoft Edge, Mozilla Firefox, or Safari.
+    \item Development Tools: A code editor such as Visual Studio Code and a terminal or command prompt for running the Flask application.
+\end{itemize}
+
+The above requirements are sufficient to execute the current prototype and verify the complete workflow from authentication to secure file recovery. These requirements can be enhanced in future versions if the application is deployed on a server or extended for real-time multi-user usage.

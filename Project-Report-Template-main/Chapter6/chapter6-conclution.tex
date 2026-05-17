@@ -1,0 +1,65 @@
+\chapter{Conclusion}
+
+The Secure File System project was developed to provide a secure and practical method for transferring files between authenticated users. The system combines challenge-response authentication, AES-GCM encryption, RSA key protection, SQLite-based metadata storage, and Least Significant Bit steganography. By integrating these techniques, the project demonstrates a layered security model in which the file content is encrypted and the encrypted payload is hidden inside an image.
+
+The implemented application successfully supports the complete workflow of secure file sharing. A user can log in, select a receiver, upload a file, encrypt the file, embed the encrypted payload into a cover image, and send it to the receiver. The receiver can view the received stego image, extract the hidden payload, decrypt the file, and recover the original filename and data. The testing results confirm that the core objectives of the project have been achieved.
+
+The project also highlights the benefit of combining cryptography and steganography. Cryptography protects the meaning of the data, while steganography hides the presence of the data. This makes the system more secure than a basic file upload application or a system that only stores encrypted files. The use of a modular implementation also makes the application easier to understand, test, and improve in future versions.
+
+\section{Limitations}
+
+Although the Secure File System works successfully as a prototype, it has certain limitations that must be considered before using it in a real-world environment.
+
+\begin{enumerate}
+    \item \textbf{Predefined Users:} The current implementation uses predefined users and pre-shared secrets. It does not include dynamic user registration, password reset, or account management features.
+
+    \item \textbf{Prototype Key Storage:} The private key information required for decryption is stored in the database as part of the prototype workflow. In a production system, private keys should never be stored in this manner and must be protected using secure key management practices.
+
+    \item \textbf{Limited Cover Image Selection:} The system uses a predefined cover image for embedding the encrypted payload. Users cannot currently select different cover images based on file size or preference.
+
+    \item \textbf{Payload Size Constraint:} The amount of data that can be hidden depends on the capacity of the cover image. Large files may not fit inside the selected image, and the user must use a larger cover image for such cases.
+
+    \item \textbf{Local Storage Dependency:} Uploaded files, stego images, and decrypted files are stored in local project directories. This is suitable for demonstration, but not ideal for distributed or cloud-based deployment.
+
+    \item \textbf{Basic Access Control:} The application filters files based on the receiver value stored in the database, but it does not yet implement advanced role-based access control, permission levels, or administrator monitoring.
+
+    \item \textbf{No Advanced Audit Logs:} The system displays process logs during encryption and decryption, but it does not maintain a permanent audit log of user activity, login attempts, file transfers, or failed decryption attempts.
+
+    \item \textbf{Limited File Validation:} The prototype focuses on secure transfer and does not include strict validation for file type, file size, malicious content, or duplicate filenames.
+
+    \item \textbf{Development Server Usage:} The Flask application is currently suitable for local testing. For production usage, it would require deployment with a proper web server, secure configuration, and HTTPS.
+\end{enumerate}
+
+These limitations do not reduce the value of the project as an academic prototype. Instead, they identify the areas where the system can be strengthened and extended in future work.
+
+\section{Future Enhancements}
+
+The Secure File System can be improved further by adding features that increase security, scalability, usability, and deployment readiness. The possible future enhancements are listed below.
+
+\begin{enumerate}
+    \item \textbf{Dynamic User Registration:} A registration module can be added so that new users can create accounts securely. This can include password hashing, email verification, and account recovery options.
+
+    \item \textbf{Improved Key Management:} The system can be enhanced by storing private keys securely outside the database or by allowing each receiver to maintain their own private key. Public keys can be used for encryption, while private keys remain under receiver control.
+
+    \item \textbf{Multi-Factor Authentication:} The current challenge-response login can be extended with multi-factor authentication, such as one-time passwords or email-based verification, to improve login security.
+
+    \item \textbf{User-Selectable Cover Images:} Future versions can allow users to upload or select cover images. The system can automatically check whether the selected image has enough capacity for the encrypted payload.
+
+    \item \textbf{File Size and Type Validation:} File validation can be added to restrict unsupported or unsafe files. The application can also show warnings when the selected file is too large for the available cover image.
+
+    \item \textbf{Cloud or Server Deployment:} The project can be deployed on a secure server with HTTPS support so that users can access it from different systems over a network.
+
+    \item \textbf{Audit Logging:} A permanent audit log can be maintained for login attempts, file uploads, decryption attempts, delete operations, and errors. This would improve traceability and administrative monitoring.
+
+    \item \textbf{Role-Based Access Control:} Administrator and normal-user roles can be added. Administrators may manage users, monitor file transfer records, and configure system settings.
+
+    \item \textbf{Enhanced Steganography Techniques:} The current LSB method can be improved by using adaptive steganography, frequency-domain techniques, or image quality analysis to reduce detectability.
+
+    \item \textbf{Performance Optimization:} Large-file handling can be improved through chunk-based encryption, optimized image processing, progress indicators, and background task processing.
+
+    \item \textbf{Integrity and Tamper Detection:} Additional hash verification can be added so that the receiver can confirm that the recovered file exactly matches the original uploaded file.
+
+    \item \textbf{Improved User Interface:} The interface can be enhanced with dashboards, transfer history, file search, preview options, alerts, and better error messages.
+\end{enumerate}
+
+In conclusion, the Secure File System successfully demonstrates a secure file transfer mechanism using hybrid cryptography and steganography. The current version proves the feasibility of the concept, while the proposed enhancements can transform it into a more secure, scalable, and production-ready application.

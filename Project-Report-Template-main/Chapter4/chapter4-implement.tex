@@ -1,0 +1,117 @@
+\chapter{Implementation}
+
+The implementation of the Secure File System converts the proposed security architecture into a working web-based application. The system is developed using Python and Flask, with separate modules for routing, database initialization, authentication, cryptographic processing, steganographic embedding, and utility operations. The implementation follows a modular design so that each major security function can be developed, tested, and modified independently.
+
+The main workflow begins when a user logs in through the challenge-response authentication mechanism. After authentication, the sender uploads a file and selects the receiver. The application encrypts the file using AES-GCM, encrypts the AES key using RSA, combines the encrypted key and ciphertext into a payload, and embeds the payload into a cover image using Least Significant Bit steganography. The receiver can then view the received stego image, extract the hidden payload, decrypt the file, and recover the original file content.
+
+\section{Implementation Requirements}
+
+The implementation requirements define the tools, modules, and conditions necessary to build and execute the Secure File System. Since the project is a web-based prototype, the system requires both application-level components and security-specific components.
+
+\begin{enumerate}
+    \item \textbf{Python Environment:} Python is used as the main programming language because it provides strong support for web development, cryptography, image processing, and database connectivity.
+
+    \item \textbf{Flask Framework:} Flask is used to implement the web application. It handles URL routing, user sessions, HTML template rendering, form submission, file upload, and redirection between pages.
+
+    \item \textbf{SQLite Database:} SQLite is used to store file transfer metadata. The database table stores the sender name, receiver name, stego image path, payload length, seed value, and private key information required for the prototype decryption workflow.
+
+    \item \textbf{Cryptographic Library:} PyCryptodome is used to implement AES-GCM encryption and RSA key generation, encryption, and decryption.
+
+    \item \textbf{Image Processing Libraries:} OpenCV and NumPy are used for reading the cover image, flattening image pixels, selecting pseudo-random pixel positions, modifying least significant bits, and reconstructing the stego image.
+
+    \item \textbf{Front-End Interface:} HTML, CSS, and JavaScript are used to create the login page, send-file page, received-files page, and result page.
+
+    \item \textbf{Storage Directories:} The implementation requires separate directories for sender files, receiver stego images, input cover image, and decrypted output files.
+
+    \item \textbf{Cover Image:} A predefined cover image is required for embedding the encrypted payload. The cover image must have enough pixel capacity to store the complete encrypted payload.
+\end{enumerate}
+
+The application is started from the main file, where the Flask object is created, the secret key is assigned for session management, the database is initialized, and the route definitions are registered. This provides a single entry point for running the complete system.
+
+\section{Implementation Details of Functionalities}
+
+The Secure File System is implemented through multiple functional modules. Each module is responsible for a specific part of the system workflow.
+
+\subsection{Application Initialization}
+
+The application starts by creating a Flask application object. The database initialization function is called before the routes are registered. This ensures that the required database table exists before any file transfer operation is performed. The route setup function connects all web pages and backend operations to the Flask application.
+
+The database contains a table named \texttt{files}. This table stores the metadata required for each transfer. The important fields are \texttt{id}, \texttt{sender}, \texttt{receiver}, \texttt{filepath}, \texttt{payload\_length}, \texttt{seed}, and \texttt{private\_key}. The \texttt{id} field uniquely identifies each received file, while the remaining fields are used during display, extraction, and decryption.
+
+\subsection{User Authentication}
+
+User authentication is implemented using a challenge-response method. When the login page is loaded, the system generates a random numeric challenge and stores it in the user session. The user submits a username and a response value. The backend retrieves the pre-shared secret corresponding to the username and computes the expected response using SHA-256 over the combination of the secret and challenge.
+
+If the submitted response matches the expected response, the username is stored in the session and the user is redirected to the received-files page. If the response does not match, login fails. This method avoids directly sending the secret value during login and demonstrates a simple authentication mechanism based on proof of knowledge.
+
+\subsection{File Upload and Receiver Selection}
+
+After login, the sender can open the send-file page. The page displays available users as possible receivers. When the sender selects a receiver and uploads a file, the backend saves the uploaded file in the sender's storage directory. This saved file becomes the input for the encryption and embedding pipeline.
+
+The application uses the active session value to identify the sender. The selected receiver is taken from the submitted form. This information is later stored in the database so that the stego image appears only in the receiver's received-files list.
+
+\subsection{Encryption and Payload Creation}
+
+The encryption pipeline begins by reading the uploaded file in binary format. Before encryption, the original filename is stored as metadata and combined with the file data using a separator. This allows the receiver to recover the original filename after decryption.
+
+AES-GCM is used for file encryption. A 256-bit AES key is generated randomly for each file. The encryption process produces a nonce, authentication tag, and ciphertext. AES-GCM is selected because it provides both confidentiality and integrity verification. During decryption, the authentication tag helps detect incorrect keys or modified ciphertext.
+
+After AES encryption, an RSA key pair is generated. The AES key is encrypted using the RSA public key. The final payload is created by combining the RSA-encrypted AES key, nonce, authentication tag, and ciphertext. The payload length is recorded because the same number of bits must be extracted from the stego image during receiver-side decryption.
+
+\subsection{Steganographic Embedding}
+
+The encrypted payload is embedded into a cover image using Least Significant Bit steganography. First, the payload bytes are converted into a binary bit stream. The cover image is read using OpenCV and flattened into a one-dimensional pixel array.
+
+Instead of embedding the payload sequentially, the implementation generates pseudo-random pixel positions using NumPy. The seed value is derived from the first four bytes of the AES key. The same seed value is stored in the database so that the receiver can regenerate the same pixel positions during extraction.
+
+For every bit in the payload, the least significant bit of the selected pixel value is replaced with the payload bit. After all bits are embedded, the modified pixel array is reshaped into the original image dimensions and saved as a stego image in the receiver's storage directory. This creates an image that visually appears like a normal image while internally carrying the encrypted file data.
+
+\subsection{Database Storage}
+
+Once the stego image is generated, the application stores the transfer information in the SQLite database. The stored values include sender, receiver, output stego image path, payload length, seed value, and private key information. This database record links the receiver to the correct stego image and provides the information required by the prototype to perform extraction and decryption.
+
+The database entry is created immediately after a successful send operation. The result page then displays process logs such as file loading, metadata addition, AES encryption, RSA key generation, AES key encryption, payload creation, and payload embedding.
+
+\subsection{Received File Display}
+
+When a user opens the received-files page, the system queries the database for records where the receiver field matches the logged-in user. The retrieved stego images are displayed as file cards. Each card includes an image preview and action buttons for decryption and deletion.
+
+This receiver-based filtering ensures that a user sees only the files intended for that account. It also provides a simple dashboard for managing received secure files.
+
+\subsection{Payload Extraction and File Decryption}
+
+When the receiver selects the decrypt option, the file identifier is passed to the backend. The system retrieves the corresponding stego image path, payload length, seed, and private key from the database. The extraction function reads the stego image, regenerates the pseudo-random pixel positions using the stored seed, and extracts the least significant bits from those positions.
+
+The extracted bits are converted back into bytes to reconstruct the encrypted payload. The payload is then split into the RSA-encrypted AES key, nonce, authentication tag, and ciphertext. The RSA private key is imported and used to decrypt the AES key. The recovered AES key is then used with the nonce and tag to decrypt and verify the ciphertext.
+
+After successful decryption, the metadata and original file data are separated. The filename is recovered from the metadata and the file data is saved in the decrypted storage directory. If payload extraction fails, RSA decryption fails, or metadata parsing fails, the system returns an error message on the result page.
+
+\subsection{Delete and Logout Functionalities}
+
+The delete functionality allows the receiver to remove a received stego image. The system first retrieves the file path from the database, deletes the image file from storage if it exists, and then removes the corresponding database record. This keeps the file system and database synchronized.
+
+The logout functionality clears the active session and redirects the user to the login page. This prevents further access to send and receive features until the user logs in again.
+
+\section{Challenges During Implementation}
+
+Several challenges were encountered during the implementation of the Secure File System. These challenges were addressed by selecting suitable algorithms, organizing the code into modules, and maintaining the metadata required for reverse operations.
+
+\begin{enumerate}
+    \item \textbf{Maintaining the Encryption and Decryption Flow:} The encryption process generates multiple values such as AES key, nonce, tag, ciphertext, RSA keys, seed, and payload length. During decryption, these values must be used in the correct order. This was handled by creating a structured pipeline for encryption, embedding, extraction, and decryption.
+
+    \item \textbf{Recovering the Original Filename:} If only file bytes are encrypted, the receiver may not know the original filename after decryption. To solve this, filename metadata is added before encryption and separated after decryption.
+
+    \item \textbf{Embedding Data Without Sequential Patterns:} Sequential LSB embedding can be easier to detect. The implementation uses pseudo-random pixel positions generated from a seed value, which distributes the payload across the image.
+
+    \item \textbf{Ensuring Correct Extraction:} The extraction process must use the same positions used during embedding. Therefore, the seed and payload length are stored in the database and reused during extraction.
+
+    \item \textbf{Handling Payload Size:} The cover image must have enough capacity to store the payload bits. The steganography module checks whether the total number of payload bits exceeds the available image capacity and raises an error if the image is too small.
+
+    \item \textbf{Synchronizing Database and Storage:} A file transfer involves both a stored image and a database entry. During deletion, both the image file and the database record must be removed. The delete function handles this by first checking the stored file path and then deleting the corresponding database entry.
+
+    \item \textbf{User-Friendly Workflow:} Cryptographic and steganographic operations are complex for normal users. The web interface hides these internal details and provides simple buttons for sending, receiving, decrypting, and deleting files.
+
+    \item \textbf{Prototype Key Handling:} In the current prototype, private key information is stored with metadata to support demonstration of the complete workflow. In a production system, this would need to be replaced with stronger key management, secure key storage, and receiver-specific key ownership.
+\end{enumerate}
+
+The implementation successfully integrates authentication, file handling, hybrid encryption, steganographic hiding, metadata storage, extraction, and recovery into a single working application. The modular structure also makes it suitable for future improvements such as dynamic user registration, better key management, stronger access control, and support for multiple cover images.

@@ -10,6 +10,8 @@ const apiPort = configText.match(/API_PORT = (\d+)/)?.[1];
 export default defineConfig({
   plugins: [react()],
   server: {
+    port: 5173,
+    strictPort: true,
     proxy: {
       "/api": `http://${host}:${apiPort}`,
     },

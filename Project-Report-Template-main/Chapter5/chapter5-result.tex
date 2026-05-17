@@ -1,0 +1,139 @@
+\chapter{Testing and Results}
+
+Testing is an important phase in the development of the Secure File System because the project involves multiple dependent operations such as authentication, file upload, encryption, steganographic embedding, database storage, extraction, decryption, and file recovery. If any one of these operations fails, the receiver may not be able to recover the original file successfully. Therefore, the system was tested by verifying each major workflow from login to final file recovery.
+
+The objective of testing was to ensure that the application performs according to the specified requirements. The tests were designed to validate user authentication, sender-side file processing, receiver-side file listing, payload extraction, decryption, output file generation, deletion, and error handling. The system was tested using predefined users, sample text and HTML files, the provided cover image, and the SQLite database used by the application.
+
+\section{Test Cases for System Testing}
+
+System testing was performed by considering the Secure File System as a complete application. Each test case checks a user-visible function and verifies whether the backend operations are completed correctly. The main test cases are listed in Table \ref{tab:system-test-cases}.
+
+\begin{longtable}{|p{1.2cm}|p{3.4cm}|p{4.2cm}|p{4.2cm}|p{2cm}|}
+\caption{System test cases for Secure File System}\label{tab:system-test-cases}\\
+\hline
+\textbf{Test ID} & \textbf{Test Scenario} & \textbf{Input / Action} & \textbf{Expected Result} & \textbf{Status} \\
+\hline
+\endfirsthead
+
+\hline
+\textbf{Test ID} & \textbf{Test Scenario} & \textbf{Input / Action} & \textbf{Expected Result} & \textbf{Status} \\
+\hline
+\endhead
+
+TC-01 & Login page loading & Open the application in a browser & Login page should be displayed with username field, challenge value, response field, and login button & Passed \\
+\hline
+
+TC-02 & Valid user authentication & Enter valid username and correct challenge-response value & User session should be created and user should be redirected to the received-files page & Passed \\
+\hline
+
+TC-03 & Invalid user authentication & Enter incorrect response value & Login should fail and the user should not be allowed to access the application & Passed \\
+\hline
+
+TC-04 & Send-file page display & Open the send-file page after login & Receiver dropdown and file upload option should be displayed & Passed \\
+\hline
+
+TC-05 & File upload and receiver selection & Select receiver and upload a sample file & File should be saved in sender storage and passed to the encryption pipeline & Passed \\
+\hline
+
+TC-06 & AES encryption & Submit uploaded file for secure transfer & File data and filename metadata should be encrypted using AES-GCM & Passed \\
+\hline
+
+TC-07 & RSA key protection & Generate RSA key pair and encrypt AES key & AES key should be encrypted using RSA public key and included in payload & Passed \\
+\hline
+
+TC-08 & Payload creation & Combine encrypted AES key, nonce, tag, and ciphertext & Payload should be created and payload length should be calculated & Passed \\
+\hline
+
+TC-09 & Steganographic embedding & Embed payload into cover image & Stego image should be generated in the receiver's storage directory & Passed \\
+\hline
+
+TC-10 & Database storage & Complete send operation & Sender, receiver, stego path, payload length, seed, and private key data should be stored in SQLite & Passed \\
+\hline
+
+TC-11 & Received-files display & Login as receiver and open received-files page & Receiver should see the stego image intended for that account & Passed \\
+\hline
+
+TC-12 & Payload extraction & Click decrypt on a received stego image & Hidden payload should be extracted using the stored seed and payload length & Passed \\
+\hline
+
+TC-13 & File decryption & Decrypt extracted payload & RSA should recover the AES key and AES-GCM should recover the original file data & Passed \\
+\hline
+
+TC-14 & File recovery & Complete decryption process & Original filename should be recovered and decrypted file should be saved in the decrypted storage directory & Passed \\
+\hline
+
+TC-15 & HTML file preview & Decrypt an HTML file & The result page should display the decrypted HTML file in an iframe preview & Passed \\
+\hline
+
+TC-16 & Non-HTML file output & Decrypt a text or other file type & The result page should provide a download option for the decrypted file & Passed \\
+\hline
+
+TC-17 & Delete received file & Click delete on a received stego image & Stego image should be removed from storage and database entry should be deleted & Passed \\
+\hline
+
+TC-18 & Logout & Click logout from the navigation bar & Session should be cleared and user should be redirected to login page & Passed \\
+\hline
+
+TC-19 & Incorrect extraction parameters & Attempt decryption with wrong seed or payload length & Payload extraction or decryption should fail and an error message should be displayed & Passed \\
+\hline
+
+TC-20 & Cover image capacity check & Try embedding payload larger than image capacity & System should detect insufficient image capacity and stop embedding & Passed \\
+\hline
+\end{longtable}
+
+The above test cases verify the complete file transfer cycle. The most important system-level validation is that the file recovered by the receiver should match the file uploaded by the sender. This confirms that encryption, embedding, extraction, decryption, and metadata recovery are working in the correct sequence.
+
+\section{Results}
+
+The Secure File System was successfully implemented and tested as a working prototype. The system provides a browser-based interface for sending and receiving secure files. The major result of the project is that an uploaded file can be encrypted, hidden inside an image, transferred to a receiver-specific storage location, extracted, decrypted, and recovered with its original filename.
+
+\subsection{Authentication Result}
+
+The login module successfully generates a challenge value when the login page is opened. When the correct response is submitted for a valid user, the system creates a session and redirects the user to the received-files page. When an incorrect response is submitted, login fails. This verifies that the challenge-response authentication workflow is functioning correctly.
+
+\subsection{Encryption and Embedding Result}
+
+The sender-side workflow successfully accepts a file upload and receiver selection. After submission, the system reads the uploaded file, attaches filename metadata, encrypts the combined data using AES-GCM, generates RSA keys, encrypts the AES key, creates the payload, and embeds the payload into the cover image. The generated stego image is saved in the receiver's storage directory.
+
+During testing, the application displayed process logs showing the successful completion of important steps such as file loading, metadata addition, AES encryption, seed generation, RSA key generation, AES key encryption, payload creation, and image embedding. These logs confirm that the encryption and embedding pipeline executes in the intended order.
+
+\subsection{Database Result}
+
+The SQLite database successfully stores the metadata generated during the send operation. Each record includes the sender, receiver, stego image path, payload length, seed, and private key information used in the prototype. This metadata allows the receiver-side module to identify the correct image and extract the correct number of bits from the correct pseudo-random positions.
+
+The received-files page correctly filters files based on the logged-in receiver. This confirms that sender and receiver information is being stored and retrieved correctly from the database.
+
+\subsection{Extraction and Decryption Result}
+
+The receiver-side decryption process successfully extracts the hidden payload from the stego image. The system regenerates the same pseudo-random pixel positions using the stored seed and reads the least significant bits from those positions. The extracted bits are converted back into bytes to reconstruct the encrypted payload.
+
+After extraction, the payload is separated into the RSA-encrypted AES key, nonce, tag, and ciphertext. RSA decryption recovers the AES key, and AES-GCM decryption recovers the original metadata and file data. The filename is extracted from the metadata and the decrypted file is saved in the output directory. The successful recovery of the original file confirms that the cryptographic and steganographic modules are integrated correctly.
+
+\subsection{User Interface Result}
+
+The web interface provides a simple workflow for the user. The login page displays the challenge and response fields. The send page provides receiver selection and file upload. The received-files page displays stego images as cards with decrypt and delete options. The result page displays process logs and final status messages such as successful file sending or successful decryption.
+
+For HTML files, the decrypted output can be previewed directly in the browser using an iframe. For text or other file types, the application provides a download option. This makes the output accessible while keeping the interface simple.
+
+\subsection{Overall Result Analysis}
+
+The final results show that the Secure File System satisfies the main objectives of the project. It authenticates users, protects file data using AES-GCM, protects the AES key using RSA, hides the encrypted payload inside an image using LSB steganography, stores transfer metadata in SQLite, and recovers the original file on the receiver side.
+
+The layered approach improves security compared to a normal file upload system. Even if the stego image is viewed directly, the hidden content is not visible. Even if the hidden payload is extracted without the required metadata and keys, the original file cannot be read. This demonstrates the benefit of combining authentication, encryption, and steganography in a single secure file sharing application.
+
+\subsection{Summary of Results}
+
+The outcomes obtained from testing are summarized below.
+
+\begin{itemize}
+    \item The application successfully authenticates valid users using a challenge-response mechanism.
+    \item Uploaded files are encrypted using AES-GCM before being stored in the transfer payload.
+    \item RSA encryption successfully protects the AES key used for file encryption.
+    \item The encrypted payload is successfully embedded into a cover image using pseudo-random LSB positions.
+    \item Receiver-specific file listing works correctly using SQLite database records.
+    \item The receiver can extract the payload, decrypt the file, and recover the original filename and data.
+    \item The delete function removes both the stored stego image and the corresponding database entry.
+    \item The interface provides clear logs and status messages for send and decrypt operations.
+\end{itemize}
+
+Thus, the testing confirms that the Secure File System prototype works according to the defined requirements and demonstrates a practical secure file transfer mechanism using hybrid cryptography and steganography.

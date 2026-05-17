@@ -225,9 +225,11 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             "errorRate": error_rate,
         }
 
-    # ── Decrypt ────────────────────────────────────────────────────────────
+    # Decrypt — packet["key"] is already a sha256-derived 32-byte key in hex;
+    # pass raw bytes to avoid double-hashing inside derive_aes_key.
     try:
-        plaintext = crypto_utils.decrypt_message(packet["payload"], packet["key"])
+        key_bytes = bytes.fromhex(packet["key"])
+        plaintext = crypto_utils.decrypt_message(packet["payload"], key_bytes)
     except Exception as exc:
         return {"ok": False, "error": f"Decryption failed: {exc}"}
 
@@ -237,10 +239,9 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         "success",
         phase="aes-decrypt",
         plaintextLength=len(plaintext),
-        errorRate=error_rate,
         senderName=sender_name,
         senderIp=sender_ip,
-        **bb84_details,
+        bb84Details=bb84_details,
     )
 
     inbox.add_message(
@@ -322,10 +323,15 @@ def _handle_client(conn: socket.socket, peer_addr: tuple) -> None:
             return
 
         msg_type = envelope.get("type", "message")
-        if msg_type == "relay":
-            response = _handle_relay(envelope, peer_addr[0])
-        else:
-            response = _handle_message(envelope, peer_addr[0])
+        try:
+            if msg_type == "relay":
+                response = _handle_relay(envelope, peer_addr[0])
+            else:
+                response = _handle_message(envelope, peer_addr[0])
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            response = {"ok": False, "error": f"Handler error: {exc}"}
 
         conn.sendall(json.dumps(response).encode("utf-8"))
 

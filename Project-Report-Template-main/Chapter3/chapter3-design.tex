@@ -1,0 +1,140 @@
+\chapter{Architecture}
+
+The architecture of the Secure File System is designed to provide a layered and modular approach for secure file transfer. The system combines a web application layer, authentication layer, cryptographic layer, steganographic layer, database layer, and storage layer. Each layer performs a specific responsibility and communicates with the other layers through well-defined data flow.
+
+The main idea of the architecture is to ensure that the uploaded file is never directly exposed to the receiver or stored as plain data after processing. The sender uploads a file through the Flask web interface. The backend encrypts the file using AES-GCM, protects the AES key using RSA, embeds the encrypted payload into a cover image using LSB steganography, stores required metadata in SQLite, and displays the stego image only to the intended receiver. The receiver extracts and decrypts the hidden payload to recover the original file.
+
+\section{Architecture Diagram}
+
+Figure \ref{fig:secure-file-system-architecture} shows the overall architecture of the Secure File System. The architecture is divided into sender-side operations, backend security processing, metadata storage, receiver-side operations, and output recovery.
+
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+    node distance=1.15cm,
+    every node/.style={font=\small},
+    process/.style={rectangle, draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.9cm, fill=blue!8},
+    security/.style={rectangle, draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.9cm, fill=green!10},
+    store/.style={cylinder, draw, shape border rotate=90, align=center, minimum width=2.8cm, minimum height=1.0cm, fill=orange!15},
+    arrow/.style={->, thick}
+]
+
+\node[process] (login) {User Login\\Challenge-Response};
+\node[process, below=of login] (upload) {File Upload\\Receiver Selection};
+\node[security, below=of upload] (encrypt) {AES-GCM Encryption\\File + Metadata};
+\node[security, below=of encrypt] (rsa) {RSA Key Protection\\Encrypt AES Key};
+\node[security, below=of rsa] (stego) {LSB Steganography\\Embed Payload in Image};
+
+\node[store, right=2.7cm of rsa] (db) {SQLite\\Metadata};
+\node[store, right=2.7cm of stego] (storage) {Storage\\Stego Image};
+
+\node[process, right=2.7cm of upload] (receiver) {Receiver Dashboard\\Received Files};
+\node[security, right=2.7cm of encrypt] (extract) {Payload Extraction\\Using Seed + Length};
+\node[security, right=2.7cm of login] (decrypt) {RSA + AES Decryption\\Recover File};
+\node[process, above=of decrypt] (output) {Decrypted File\\Original Filename};
+
+\draw[arrow] (login) -- (upload);
+\draw[arrow] (upload) -- (encrypt);
+\draw[arrow] (encrypt) -- (rsa);
+\draw[arrow] (rsa) -- (stego);
+\draw[arrow] (rsa) -- (db);
+\draw[arrow] (stego) -- (storage);
+\draw[arrow] (db) -- (receiver);
+\draw[arrow] (storage) -- (receiver);
+\draw[arrow] (receiver) -- (extract);
+\draw[arrow] (db) -- (extract);
+\draw[arrow] (extract) -- (decrypt);
+\draw[arrow] (decrypt) -- (output);
+
+\end{tikzpicture}
+\caption{Architecture of Secure File System}
+\label{fig:secure-file-system-architecture}
+\end{figure}
+
+The sender side begins with user authentication and file upload. The security processing layer performs encryption, key protection, and steganographic embedding. The database layer stores the metadata required for reverse processing. On the receiver side, the stego image is displayed, the hidden payload is extracted, and the original file is recovered through decryption.
+
+\section{Detailed Description}
+
+The Secure File System architecture is divided into several functional components. Each component contributes to the complete secure file transfer workflow.
+
+\subsection{User Interface Layer}
+
+The user interface layer is implemented using HTML, CSS, JavaScript, and Flask templates. It provides pages for login, file sending, received-file viewing, process-result display, and decrypted-file preview. The interface hides the complexity of cryptographic and steganographic operations from the user and presents them as simple actions such as login, upload, decrypt, and delete.
+
+The login page displays a username field, challenge value, response field, and login button. The send page allows the authenticated user to select a receiver and upload a file. The received-files page displays stego images received by the logged-in user. The result page displays processing logs and status messages after sending or decrypting a file.
+
+\subsection{Authentication Layer}
+
+The authentication layer uses a challenge-response mechanism. When the login page is requested, the backend generates a random challenge and stores it in the session. The user submits a response generated from the challenge and the user's pre-shared secret. The backend computes the expected response using SHA-256 and compares it with the submitted response.
+
+If the values match, the user is authenticated and the username is stored in the session. If the values do not match, access is denied. This layer ensures that only valid users can access the file sending and receiving functions.
+
+\subsection{Application Routing Layer}
+
+The routing layer is implemented using Flask routes. It controls the movement between pages and connects the front-end forms to backend processing. The important routes are login, send, receive, decrypt, delete, serve-file, and logout.
+
+The send route handles file upload and calls the encryption and embedding pipeline. The receive route fetches files intended for the logged-in user from the database. The decrypt route retrieves the required metadata and calls the extraction and decryption pipeline. The delete route removes the selected stego image and its database entry. The logout route clears the session and returns the user to the login page.
+
+\subsection{Cryptographic Layer}
+
+The cryptographic layer protects the file content and encryption key. AES-GCM is used to encrypt the uploaded file data along with filename metadata. A random 256-bit AES key is generated for each file. AES-GCM produces a ciphertext, nonce, and authentication tag. The tag is used during decryption to verify that the ciphertext has not been modified.
+
+RSA is used to protect the AES key. For each transfer, an RSA key pair is generated. The AES key is encrypted using the RSA public key and later decrypted using the RSA private key during recovery. This hybrid approach is used because AES is efficient for file encryption, while RSA is suitable for protecting small key material.
+
+\subsection{Payload Formation}
+
+Before encryption, the system adds metadata containing the original filename. The metadata and file data are combined and then encrypted. After AES encryption, the encrypted AES key, nonce, authentication tag, and ciphertext are joined into a single payload.
+
+The payload structure can be represented as follows:
+
+\begin{center}
+\texttt{Encrypted AES Key + Nonce + Authentication Tag + Ciphertext}
+\end{center}
+
+This structure is important because the receiver must split the extracted payload into the same parts during decryption. The payload length is stored in the database so that the correct number of bits can be extracted from the stego image.
+
+\subsection{Steganographic Layer}
+
+The steganographic layer hides the encrypted payload inside a cover image. The system uses Least Significant Bit embedding. In this method, each bit of the payload is placed into the least significant bit of selected image pixel values. Since changing the least significant bit causes only a very small change in pixel intensity, the image appears visually unchanged to the user.
+
+The implementation uses pseudo-random pixel positions rather than sequential positions. A seed value is derived from the AES key and stored in the database. During embedding, NumPy generates random pixel indices using this seed. During extraction, the same seed regenerates the same positions, allowing the receiver to recover the payload in the correct order.
+
+\subsection{Database Layer}
+
+The SQLite database stores metadata for each file transfer. The database table includes the sender, receiver, stego image path, payload length, seed, and private key information used in the prototype. This information connects each receiver to the stego images intended for them and provides the required parameters for extraction and decryption.
+
+The database layer is also used during deletion. When the receiver deletes a stego image, the corresponding database record is removed to keep the storage and database synchronized.
+
+\subsection{Storage Layer}
+
+The storage layer contains uploaded sender files, generated receiver stego images, the cover image, and decrypted output files. Sender files are stored temporarily in the sender's sent directory. Stego images are stored in the receiver's received directory. Decrypted files are stored in the decrypted output directory after successful recovery.
+
+This directory-based organization makes it easy to separate sender data, receiver data, input resources, and output files during prototype testing.
+
+\subsection{Receiver-Side Extraction and Recovery}
+
+When the receiver clicks the decrypt option, the system fetches the selected record from the database. The stego image path, payload length, seed, and private key are passed to the extraction and decryption pipeline. The hidden bits are extracted from the same pseudo-random positions used during embedding and converted back into bytes.
+
+The reconstructed payload is split into the encrypted AES key, nonce, authentication tag, and ciphertext. RSA decryption recovers the AES key, and AES-GCM decryption recovers the metadata and original file data. Finally, the filename is read from the metadata and the file is saved in the decrypted storage directory.
+
+\subsection{Data Flow Summary}
+
+The complete data flow of the system is summarized below.
+
+\begin{enumerate}
+    \item User logs in using challenge-response authentication.
+    \item Sender selects receiver and uploads a file.
+    \item Filename metadata is attached to the uploaded file data.
+    \item File data is encrypted using AES-GCM.
+    \item AES key is encrypted using RSA.
+    \item Encrypted key, nonce, tag, and ciphertext are combined as a payload.
+    \item Payload is embedded into the cover image using pseudo-random LSB positions.
+    \item Stego image is stored in the receiver's storage directory.
+    \item Metadata is stored in SQLite for later extraction and decryption.
+    \item Receiver views the stego image and selects decrypt.
+    \item Payload is extracted from the stego image using seed and payload length.
+    \item AES key is recovered using RSA decryption.
+    \item Original file data and filename are recovered using AES-GCM decryption.
+\end{enumerate}
+
+The architecture therefore ensures that the system provides authenticated access, encrypted file protection, hidden payload storage, receiver-specific retrieval, and successful file recovery.
