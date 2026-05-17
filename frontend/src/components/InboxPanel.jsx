@@ -87,6 +87,31 @@ function NodeSteps({ msg }) {
   );
 }
 
+function CryptoDetails({ details }) {
+  if (!details?.nonce) return null;
+  const sender = details.senderBB84 || {};
+  const receiver = details.receiverBB84 || {};
+  return (
+    <details className="cryptoPanel">
+      <summary>Encryption / BB84 details</summary>
+      <div className="cryptoDetails">
+        <div><span>Nonce</span><code>{details.nonce.slice(0, 24)}...</code></div>
+        <div><span>AES key</span><code>{details.aesKeyFingerprint}... ({details.aesKeyLengthBits} bits)</code></div>
+        <div><span>IV</span><code>{details.ivPreview}...</code></div>
+        <div><span>Ciphertext</span><code>{details.ciphertextPreview}...</code></div>
+        <div><span>Decryption</span><code>{details.decrypted ? `Plaintext: ${details.plaintextPreview}` : `Blocked: ${details.blockedReason}`}</code></div>
+        <div><span>Sender bases</span><code>Alice {sender.aliceBasisPreview} | Bob {sender.bobBasisPreview}</code></div>
+        <div><span>Receiver bases</span><code>Alice {receiver.aliceBasisPreview} | Bob {receiver.bobBasisPreview}</code></div>
+        <div><span>Receiver bits</span><code>Alice {receiver.aliceBitPreview} | Bob {receiver.bobBitPreview}</code></div>
+        <div><span>Keep mask</span><code>{receiver.keepPreview}</code></div>
+        <div><span>Sifted key bits</span><code>{receiver.siftedPreview}</code></div>
+        <div><span>BB84 counts</span><code>{receiver.matchingBases} matching, {receiver.siftedBits} sifted, {receiver.comparedBits} compared, {receiver.generatedBits} generated</code></div>
+        <div><span>Error rate</span><code>{Math.round((receiver.errorRate || 0) * 100)}% / {Math.round((receiver.errorThreshold || 0.15) * 100)}%</code></div>
+      </div>
+    </details>
+  );
+}
+
 export default function InboxPanel({ messages, onClear }) {
   return (
     <section className="panel inboxPanel">
@@ -145,6 +170,7 @@ export default function InboxPanel({ messages, onClear }) {
               </div>
 
               <BB84Badge details={msg.bb84Details} />
+              <CryptoDetails details={msg.cryptoDetails} />
               <NodeSteps msg={msg} />
             </div>
           ))}

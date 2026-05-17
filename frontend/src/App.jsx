@@ -28,12 +28,31 @@ function SendExplanation({ sendResult }) {
   if (!sendResult) return null;
   const receiverResult = getReceiverResult(sendResult);
   const steps = receiverResult?.routeSteps || [];
+  const crypto = receiverResult?.cryptoDetails || {};
+  const senderBB84 = crypto.senderBB84 || {};
+  const receiverBB84 = crypto.receiverBB84 || {};
   const blocked = receiverResult?.attackDetected || receiverResult?.ok === false;
 
   return (
     <div className={`sendExplanation ${blocked ? "blocked" : "delivered"}`}>
       <strong>{blocked ? "Receiver blocked the message" : "Receiver accepted the message"}</strong>
       {receiverResult?.attackType && <p>{receiverResult.attackType}</p>}
+      {crypto.nonce && (
+        <div className="cryptoDetails">
+          <div><span>Nonce</span><code>{crypto.nonce.slice(0, 24)}...</code></div>
+          <div><span>AES key</span><code>{crypto.aesKeyFingerprint}... ({crypto.aesKeyLengthBits} bits)</code></div>
+          <div><span>IV</span><code>{crypto.ivPreview}...</code></div>
+          <div><span>Ciphertext</span><code>{crypto.ciphertextPreview}...</code></div>
+          <div><span>Decryption</span><code>{crypto.decrypted ? `Plaintext: ${crypto.plaintextPreview}` : `Blocked: ${crypto.blockedReason}`}</code></div>
+          <div><span>Sender bases</span><code>Alice {senderBB84.aliceBasisPreview} | Bob {senderBB84.bobBasisPreview}</code></div>
+          <div><span>Receiver bases</span><code>Alice {receiverBB84.aliceBasisPreview} | Bob {receiverBB84.bobBasisPreview}</code></div>
+          <div><span>Keep mask</span><code>{receiverBB84.keepPreview}</code></div>
+          <div><span>Bits</span><code>Alice {receiverBB84.aliceBitPreview} | Bob {receiverBB84.bobBitPreview}</code></div>
+          <div><span>Sifted key bits</span><code>{receiverBB84.siftedPreview}</code></div>
+          <div><span>BB84 counts</span><code>{receiverBB84.matchingBases} matching, {receiverBB84.siftedBits} sifted, {receiverBB84.comparedBits} compared</code></div>
+          <div><span>Error rate</span><code>{Math.round((receiverBB84.errorRate || 0) * 100)}% / {Math.round((receiverBB84.errorThreshold || 0.15) * 100)}%</code></div>
+        </div>
+      )}
       {steps.length > 0 && (
         <ol>
           {steps.map((step, index) => (

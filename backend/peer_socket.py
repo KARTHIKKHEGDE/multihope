@@ -164,6 +164,50 @@ def _build_route_steps(
 
 # ─── Outbound: send a JSON envelope over a raw TCP socket ─────────────────────
 
+def _bb84_details(result: bb84.BB84Result) -> dict:
+    return {
+        "errorRate": result.error_rate,
+        "errorThreshold": config.ERROR_THRESHOLD,
+        "matchingBases": result.matching_bases,
+        "siftedBits": len(result.sifted_bits),
+        "comparedBits": result.compared_bits,
+        "generatedBits": result.generated_bits,
+        "keyFingerprint": result.key.hex()[:12],
+        "aliceBasisPreview": result.alice_basis_preview,
+        "bobBasisPreview": result.bob_basis_preview,
+        "aliceBitPreview": result.alice_bit_preview,
+        "bobBitPreview": result.bob_bit_preview,
+        "keepPreview": result.keep_preview,
+        "siftedPreview": result.sifted_preview,
+    }
+
+
+def _crypto_details(
+    *,
+    packet: dict,
+    receiver_bb84: dict,
+    plaintext: str = "",
+    decrypted: bool = False,
+    blocked_reason: str = "",
+) -> dict:
+    payload = packet.get("payload", {})
+    sender_bb84 = packet.get("routeMeta", {}).get("senderBb84", {})
+    key_hex = str(packet.get("key", ""))
+    return {
+        "nonce": str(packet.get("nonce", "")),
+        "attackMode": packet.get("routeMeta", {}).get("attackMode", ""),
+        "aesKeyFingerprint": key_hex[:12],
+        "aesKeyLengthBits": len(key_hex) * 4 if key_hex else 0,
+        "ivPreview": str(payload.get("iv", ""))[:24],
+        "ciphertextPreview": str(payload.get("ciphertext", ""))[:40],
+        "plaintextPreview": plaintext[:80] if decrypted else "",
+        "decrypted": decrypted,
+        "blockedReason": blocked_reason,
+        "senderBB84": sender_bb84,
+        "receiverBB84": receiver_bb84,
+    }
+
+
 def _send_envelope(host: str, port: int, envelope: dict) -> dict:
     """Open a TCP socket, send an envelope JSON, return the response JSON."""
     with socket.create_connection((host, port), timeout=config.SOCKET_TIMEOUT_SECONDS) as sock:
@@ -217,6 +261,9 @@ def send_message_to_peer(
         "errorRate": key_result.error_rate,
         "routeMeta": {
             "targetIp": target_ip,
+            "attackMode": attack_mode,
+            "senderPlaintextPreview": message[:80],
+            "senderBb84": _bb84_details(key_result),
             "virtualHops": virtual_hops,
             "attackHop": attack_hop,
         },
@@ -320,16 +367,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
     )
     error_rate = key_result.error_rate
 
-    bb84_details = {
-        "errorRate":      error_rate,
-        "errorThreshold": config.ERROR_THRESHOLD,
-        "matchingBases":  key_result.matching_bases,
-        "siftedBits":     len(key_result.sifted_bits),
-        "keyFingerprint": key_result.key.hex()[:12],
-        "aliceBasisPreview": key_result.alice_basis_preview,
-        "bobBasisPreview":   key_result.bob_basis_preview,
-        "keepPreview":       key_result.keep_preview,
-    }
+    bb84_details = _bb84_details(key_result)
 
     # ── Attack detection ───────────────────────────────────────────────────
     nonce  = str(packet.get("nonce", ""))
@@ -369,6 +407,12 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
     )
 
     if attack_detected:
+        crypto_details = _crypto_details(
+            packet=packet,
+            receiver_bb84=bb84_details,
+            decrypted=False,
+            blocked_reason=attack_type,
+        )
         logger.emit_event(
             "receiver",
             f"[ATTACK] {attack_type}  from={sender_name}",
@@ -388,6 +432,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             generatedBits=key_result.generated_bits,
             keyFingerprint=key_result.key.hex()[:12],
             routeSteps=route_steps,
+            cryptoDetails=crypto_details,
         )
         inbox.add_message(
             plaintext="[MESSAGE BLOCKED - attack detected]",
@@ -400,6 +445,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             relay_ip=relay_ip,
             bb84_details=bb84_details,
             route_steps=route_steps,
+            crypto_details=crypto_details,
         )
         return {
             "ok": False,
@@ -408,6 +454,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             "errorRate": error_rate,
             "routeSteps": route_steps,
             "bb84Details": bb84_details,
+            "cryptoDetails": crypto_details,
         }
 
     # Decrypt — packet["key"] is already a sha256-derived 32-byte key in hex;
@@ -417,6 +464,13 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         plaintext = crypto_utils.decrypt_message(packet["payload"], key_bytes)
     except Exception as exc:
         return {"ok": False, "error": f"Decryption failed: {exc}"}
+
+    crypto_details = _crypto_details(
+        packet=packet,
+        receiver_bb84=bb84_details,
+        plaintext=plaintext,
+        decrypted=True,
+    )
 
     logger.emit_event(
         "receiver",
@@ -428,6 +482,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         senderIp=sender_ip,
         bb84Details=bb84_details,
         routeSteps=route_steps,
+        cryptoDetails=crypto_details,
     )
 
     inbox.add_message(
@@ -440,6 +495,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         relay_ip=relay_ip,
         bb84_details=bb84_details,
         route_steps=route_steps,
+        crypto_details=crypto_details,
     )
 
     return {
@@ -448,6 +504,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         "errorRate": error_rate,
         "routeSteps": route_steps,
         "bb84Details": bb84_details,
+        "cryptoDetails": crypto_details,
     }
 
 
