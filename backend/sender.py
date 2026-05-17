@@ -35,7 +35,6 @@ def _log_bb84(source: str, result: bb84.BB84Result) -> None:
 
 
 def build_initial_packet(message: str) -> dict[str, object]:
-    mode = attack_detector.get_attack_mode()
     key_result = bb84.establish_key(
         eavesdrop=False,
         bit_flip_rate=0.0,
@@ -61,8 +60,6 @@ def build_initial_packet(message: str) -> dict[str, object]:
         "route": ["sender"],
         "errorRate": key_result.error_rate,
     }
-    if mode == "mitm":
-        packet["mitm"] = True
     logger.emit_event("sender", "Sent encrypted packet", "success", errorRate=key_result.error_rate)
     return packet
 

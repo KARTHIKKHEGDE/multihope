@@ -5,17 +5,16 @@ Architecture:
   - Each laptop runs this server on PEER_SOCKET_PORT (5010).
   - Sender machine opens a TCP socket to receiver's port 5010 and sends a JSON envelope.
   - Receiver runs BB84, detects attacks, decrypts, stores in inbox.
-  - MITM: sender sends to attacker's port 5010; attacker logs the intercept, then
-    opens a NEW socket to the real receiver — demonstrating the man-in-the-middle.
+  - MITM: an in-path attacker tampers with ciphertext; receiver catches the
+    modified bytes through AES/HMAC integrity verification.
   - Replay: attacker resends a captured envelope; receiver detects duplicate nonce.
-  - Eavesdrop: sender marks envelope with attackMode=eavesdrop; receiver runs BB84
-    with eavesdropping simulation, causing high error rate.
+  - Eavesdrop: BB84 measurements are disturbed, producing a high error rate.
 
 Envelope JSON schema (sent over raw TCP):
   {
     "type": "message" | "relay",
     "packet": {                        # BB84-encrypted packet
-      "payload": {"iv": "...", "ciphertext": "..."},
+      "payload": {"iv": "...", "ciphertext": "...", "tag": "..."},
       "key":     "<hex AES key>",
       "nonce":   "<hex 32-char>",
       "timestamp": <float>,
@@ -42,6 +41,7 @@ Response JSON schema:
 
 from __future__ import annotations
 
+import base64
 import json
 import socket
 import threading
@@ -49,6 +49,16 @@ import time
 from secrets import randbelow, token_hex
 
 from . import attack_detector, bb84, config, crypto_utils, inbox, logger, peer_discovery
+
+
+def _tamper_payload(payload: dict) -> dict:
+    """Flip one ciphertext bit so AES/HMAC verification fails downstream."""
+    tampered = dict(payload)
+    ciphertext = bytearray(base64.b64decode(str(tampered.get("ciphertext", ""))))
+    if ciphertext:
+        ciphertext[0] ^= 0x01
+    tampered["ciphertext"] = base64.b64encode(bytes(ciphertext)).decode("ascii")
+    return tampered
 
 
 def _build_route_steps(
@@ -87,10 +97,10 @@ def _build_route_steps(
         hop_number = int(hop.get("number", 0))
         hop_attacked = attack_mode == "mitm" and hop_number == attack_hop
         if hop_attacked:
-            title = "MITM happened at this hop"
+            title = "MITM tampered with ciphertext"
             detail = (
-                "A man-in-the-middle touched this hop in the simulated route. "
-                "The packet is marked as MITM, so the receiver must block it before decrypting."
+                "A man-in-the-middle modified the encrypted bytes in transit. "
+                "The attacker cannot recompute the AES HMAC tag without the hop key."
             )
             status = "attack"
         elif attack_mode == "eavesdrop":
@@ -129,8 +139,8 @@ def _build_route_steps(
     if attack_detected:
         if attack_mode == "mitm":
             detail = (
-                f"Blocked before decrypting because MITM was detected on Hop {attack_hop}. "
-                "The receiver saw mode=mitm in the packet metadata."
+                f"Blocked because ciphertext tampering from Hop {attack_hop} made the AES HMAC tag fail. "
+                "The receiver did not trust attack metadata; it verified cryptographic integrity."
             )
         elif attack_mode == "replay":
             detail = f"Blocked because nonce {nonce_preview}... matched a recently received packet."
@@ -145,8 +155,14 @@ def _build_route_steps(
             "ip": target_ip or config.LOCAL_IP,
             "status": "attack",
             "title": "Attack detected and message blocked",
-            "detail": detail,
-        })
+        "detail": detail,
+        "crypto": {
+            "action": "blocked",
+            "blockedReason": attack_type,
+            "bb84": bb84_details,
+            "note": "Receiver blocks only after nonce, BB84, or AES integrity verification fails.",
+        },
+    })
     else:
         steps.append({
             "node": "Receiver",
@@ -200,6 +216,7 @@ def _crypto_details(
         "aesKeyLengthBits": len(key_hex) * 4 if key_hex else 0,
         "ivPreview": str(payload.get("iv", ""))[:24],
         "ciphertextPreview": str(payload.get("ciphertext", ""))[:40],
+        "tagPreview": str(payload.get("tag", ""))[:24],
         "senderPlaintextPreview": packet.get("routeMeta", {}).get("senderPlaintextPreview", ""),
         "plaintextPreview": plaintext[:80] if decrypted else "",
         "decrypted": decrypted,
@@ -228,6 +245,7 @@ def _packet_crypto(
         "aesKeyLengthBits": len(key) * 8,
         "ivPreview": str(payload.get("iv", ""))[:24],
         "ciphertextPreview": str(payload.get("ciphertext", ""))[:40],
+        "tagPreview": str(payload.get("tag", ""))[:24],
         "bb84": _bb84_details(bb84_result),
         "note": note,
     }
@@ -267,33 +285,34 @@ def _simulate_multihop_packet(message: str, attack_mode: str, nonce: str) -> tup
 
     for hop in virtual_hops:
         hop_number = int(hop["number"])
-        decrypted = crypto_utils.decrypt_message(current_payload, current_key)
         hop_attacked = attack_mode == "mitm" and hop_number == attack_hop
 
         if hop_attacked:
+            tampered_payload = _tamper_payload(current_payload)
             steps.append({
                 "node": f"Hop {hop_number}",
                 "name": hop["name"],
                 "ip": hop["ip"],
                 "status": "attack",
-                "title": "Decrypt, then MITM detected",
+                "title": "MITM modifies ciphertext",
                 "detail": (
-                    f"Hop {hop_number} decrypted the incoming packet, but MITM was detected here. "
-                    "The route is marked unsafe and later nodes must not trust/decrypt it."
+                    f"An attacker at Hop {hop_number} flips a ciphertext bit while forwarding the packet. "
+                    "The AES HMAC tag is not updated because the attacker does not know the hop key."
                 ),
                 "crypto": _packet_crypto(
-                    action="decrypt-block",
-                    plaintext=decrypted,
-                    payload=current_payload,
+                    action="tamper",
+                    plaintext=current_plaintext,
+                    payload=tampered_payload,
                     key=current_key,
                     bb84_result=current_key_result,
-                    decrypted_plaintext=decrypted,
-                    note="Incoming packet decrypted; re-encryption stopped because this hop is attacked.",
+                    note="Ciphertext was modified in transit; receiver should catch this by verifying HMAC before decrypting.",
                 ),
             })
+            current_payload = tampered_payload
             blocked = True
             break
 
+        decrypted = crypto_utils.decrypt_message(current_payload, current_key)
         next_name = "Receiver" if hop_number == 3 else f"Hop {hop_number + 1}"
         next_key_result = bb84.establish_key(
             eavesdrop=attack_mode == "eavesdrop",
@@ -332,6 +351,7 @@ def _simulate_multihop_packet(message: str, attack_mode: str, nonce: str) -> tup
         "attackHop": attack_hop,
         "nodeRouteSteps": steps,
         "finalBlockedInRoute": blocked,
+        "ciphertextTampered": blocked,
         "finalBb84": _bb84_details(current_key_result),
     }
     packet = {
@@ -476,8 +496,6 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
 
     # BB84 key exchange for this hop (simulates quantum channel)
     is_eavesdrop = attack_mode == "eavesdrop"
-    is_mitm      = attack_mode == "mitm"
-
     key_result = bb84.establish_key(
         eavesdrop=is_eavesdrop,
         bit_flip_rate=config.EAVESDROP_BIT_FLIP_RATE if is_eavesdrop else 0.0,
@@ -496,9 +514,6 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
     if not nonce_result.ok:
         attack_detected = True
         attack_type = "Replay Attack - duplicate nonce detected"
-    elif is_mitm:
-        attack_detected = True
-        attack_type = f"Man-in-the-Middle - attack detected at Hop {attack_hop}"
     elif attack_detector.is_error_rate_attack(error_rate):
         attack_detected = True
         attack_type = (
@@ -531,14 +546,14 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         "status": "success" if nonce_result.ok else "attack",
         "title": "Nonce and mode check",
         "detail": (
-            f"Receiver checks nonce {nonce[:12]}... and mode={attack_mode}. "
-            f"Nonce is {'fresh' if nonce_result.ok else 'a duplicate'}."
+            f"Receiver checks nonce {nonce[:12]}... before decryption. "
+            f"Nonce is {'fresh' if nonce_result.ok else 'a duplicate'}. Mode is shown only for the demo trace, not trusted as proof."
         ),
         "crypto": {
             "action": "inspect",
             "nonce": nonce,
             "mode": attack_mode,
-            "note": "Replay detection happens before final decryption.",
+            "note": "Replay detection happens before final decryption; attack mode metadata is not used as MITM proof.",
         },
     })
 
@@ -613,7 +628,74 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         key_bytes = bytes.fromhex(packet["key"])
         plaintext = crypto_utils.decrypt_message(packet["payload"], key_bytes)
     except Exception as exc:
-        return {"ok": False, "error": f"Decryption failed: {exc}"}
+        attack_type = (
+            "Man-in-the-Middle - AES integrity check failed"
+            if attack_mode == "mitm"
+            else f"Decryption failed: {exc}"
+        )
+        route_steps.append({
+            "node": "Receiver laptop",
+            "name": config.MACHINE_NAME,
+            "ip": config.LOCAL_IP,
+            "status": "attack",
+            "title": "AES integrity check failed",
+            "detail": (
+                "Receiver recalculated the AES HMAC over IV + ciphertext before releasing plaintext. "
+                f"The check failed: {exc}. This means the encrypted bytes were modified or the wrong key was used."
+            ),
+            "crypto": {
+                "action": "blocked",
+                "blockedReason": attack_type,
+                "payload": packet.get("payload", {}),
+                "aesKeyFingerprint": str(packet.get("key", ""))[:12],
+                "aesKeyLengthBits": len(str(packet.get("key", ""))) * 4,
+                "bb84": packet.get("routeMeta", {}).get("finalBb84", bb84_details),
+                "note": "No plaintext is released when AES HMAC verification fails.",
+            },
+        })
+        crypto_details = _crypto_details(
+            packet=packet,
+            receiver_bb84=bb84_details,
+            decrypted=False,
+            blocked_reason=attack_type,
+        )
+        logger.emit_event(
+            "receiver",
+            f"[ATTACK] {attack_type}  from={sender_name}",
+            "attack",
+            phase="attack-detected",
+            detectionReason=attack_type,
+            errorRate=error_rate,
+            errorThreshold=config.ERROR_THRESHOLD,
+            senderName=sender_name,
+            senderIp=sender_ip,
+            routeSteps=route_steps,
+            cryptoDetails=crypto_details,
+            ciphertextTampered=attack_mode == "mitm",
+            integrityTagPresent=bool(packet.get("payload", {}).get("tag")),
+        )
+        inbox.add_message(
+            plaintext="[MESSAGE BLOCKED - attack detected]",
+            sender_name=sender_name,
+            sender_ip=sender_ip,
+            error_rate=error_rate,
+            attack_detected=True,
+            attack_type=attack_type,
+            relay_name=relay_name,
+            relay_ip=relay_ip,
+            bb84_details=bb84_details,
+            route_steps=route_steps,
+            crypto_details=crypto_details,
+        )
+        return {
+            "ok": False,
+            "attackDetected": True,
+            "attackType": attack_type,
+            "errorRate": error_rate,
+            "routeSteps": route_steps,
+            "bb84Details": bb84_details,
+            "cryptoDetails": crypto_details,
+        }
 
     route_steps.append({
         "node": "Receiver laptop",
@@ -694,7 +776,7 @@ def _handle_relay(envelope: dict, peer_addr: str) -> dict:
         f"[MITM] Intercepted from {sender_name} -> forwarding to {target_ip}:{target_port}",
         "attack",
         phase="attack-detected",
-        detectionReason="Packet routed through MITM relay machine",
+        detectionReason="Relay intercepted the encrypted packet and may tamper with ciphertext",
         senderName=sender_name,
         senderIp=sender_ip,
         targetIp=target_ip,
@@ -705,15 +787,23 @@ def _handle_relay(envelope: dict, peer_addr: str) -> dict:
     if not target_ip:
         return {"ok": False, "error": "Relay has no target IP"}
 
-    # Forward to the real receiver with relay metadata attached
+    forwarded_packet = dict(packet)
+    route_meta = dict(forwarded_packet.get("routeMeta", {}))
+    if attack_mode == "mitm" and not route_meta.get("ciphertextTampered"):
+        forwarded_packet["payload"] = _tamper_payload(forwarded_packet.get("payload", {}))
+        route_meta["ciphertextTampered"] = True
+        route_meta["relayTamperedBy"] = config.MACHINE_NAME
+        forwarded_packet["routeMeta"] = route_meta
+
+    # Forward to the real receiver with relay identity attached for display only.
     forward_envelope = {
         "type": "message",
-        "packet": packet,
+        "packet": forwarded_packet,
         "senderName": sender_name,
         "senderIp": sender_ip,
-        "attackMode": attack_mode,       # "mitm" — receiver will detect it
+        "attackMode": attack_mode,
         "relayName": config.MACHINE_NAME,
-        "relayIp":   config.LOCAL_IP,
+        "relayIp": config.LOCAL_IP,
     }
     try:
         resp = _send_envelope(target_ip, target_port, forward_envelope)

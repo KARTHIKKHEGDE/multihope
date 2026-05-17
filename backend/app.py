@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -124,35 +123,6 @@ def status():
             "port": config.API_PORT,
             "socketPort": config.PEER_SOCKET_PORT,
         },
-    })
-
-
-@app.post("/api/mitm-attempt")
-def mitm_attempt():
-    body = request.get_json(silent=True) or {}
-    guess = body.get("keyGuess", "")
-    intercepted = attack_detector.get_intercepted()
-
-    if not intercepted:
-        return jsonify({"success": False, "message": "No intercepted packet available."})
-
-    real_fingerprint = intercepted.get("realKeyFingerprint", "")
-    try:
-        guess_bytes = bytes.fromhex(guess) if len(guess) >= 2 else guess.encode("utf-8")
-    except ValueError:
-        guess_bytes = guess.encode("utf-8")
-
-    guess_key = hashlib.sha256(guess_bytes).digest()
-    guess_fingerprint = guess_key.hex()[:12]
-    matched = guess_fingerprint == real_fingerprint
-
-    return jsonify({
-        "success": matched,
-        "guessFingerprint": guess_fingerprint,
-        "realFingerprint":  real_fingerprint,
-        "message": "Key matched! You cracked the encryption (in theory)."
-                   if matched else
-                   f"Wrong key. {guess_fingerprint} != {real_fingerprint}. BB84 makes this nearly impossible!",
     })
 
 

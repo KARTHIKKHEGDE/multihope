@@ -90,12 +90,10 @@ def register_nonce(nonce: str, timestamp: float | None = None) -> DetectionResul
     return DetectionResult(True, "ok", "nonce accepted")
 
 
-def inspect_packet(nonce: str, error_rate: float, mitm_flag: bool = False) -> DetectionResult:
+def inspect_packet(nonce: str, error_rate: float) -> DetectionResult:
     nonce_result = register_nonce(nonce)
     if not nonce_result.ok:
         return nonce_result
-    if mitm_flag:
-        return DetectionResult(False, "attack", "MITM flag detected")
     if is_error_rate_attack(error_rate):
         return DetectionResult(False, "attack", "BB84 error rate exceeded threshold")
     return DetectionResult(True, "ok", "packet accepted")

@@ -15,9 +15,9 @@ import AttackControls from "./components/AttackControls.jsx";
 
 const attackModes = [
   { id: "normal", label: "Normal send", Icon: Shield, color: "teal", desc: "All 3 hops forward the encrypted packet safely. Receiver decrypts it." },
-  { id: "mitm", label: "Random MITM", Icon: UserRoundX, color: "red", desc: "One of the 3 hops is randomly attacked. Receiver blocks the packet and shows the exact hop." },
-  { id: "eavesdrop", label: "Eavesdrop", Icon: RadioTower, color: "orange", desc: "The BB84 channel is disturbed while crossing the hops. Receiver blocks if the error rate is too high." },
-  { id: "replay", label: "Replay", Icon: Repeat, color: "purple", desc: "The same packet is sent again through the 3 hops. Receiver blocks the duplicate nonce." },
+  { id: "mitm", label: "Random MITM", Icon: UserRoundX, color: "red", desc: "One hop tampers with ciphertext. Receiver blocks when AES HMAC integrity verification fails." },
+  { id: "eavesdrop", label: "Eavesdrop", Icon: RadioTower, color: "orange", desc: "An eavesdropper disturbs BB84 measurements. Receiver blocks when QBER exceeds the threshold." },
+  { id: "replay", label: "Replay", Icon: Repeat, color: "purple", desc: "The same encrypted packet is resent. Receiver blocks when the nonce is already in the replay cache." },
 ];
 
 function getReceiverResult(sendResult) {
@@ -35,6 +35,7 @@ function NodeCrypto({ step, crypto }) {
         {nodeCrypto.aesKeyFingerprint && <p><span>New AES key</span><code>{nodeCrypto.aesKeyFingerprint}... ({nodeCrypto.aesKeyLengthBits} bits)</code></p>}
         {nodeCrypto.ivPreview && <p><span>New IV</span><code>{nodeCrypto.ivPreview}...</code></p>}
         {nodeCrypto.ciphertextPreview && <p><span>New ciphertext</span><code>{nodeCrypto.ciphertextPreview}...</code></p>}
+        {nodeCrypto.tagPreview && <p><span>AES HMAC tag</span><code>{nodeCrypto.tagPreview}...</code></p>}
         {nodeCrypto.payload?.ciphertext && <p><span>Incoming ciphertext</span><code>{nodeCrypto.payload.ciphertext.slice(0, 40)}...</code></p>}
         {bb84.aliceBasisPreview && <p><span>BB84 bases</span><code>Alice {bb84.aliceBasisPreview} | Bob {bb84.bobBasisPreview}</code></p>}
         {bb84.aliceBitPreview && <p><span>Bits</span><code>Alice {bb84.aliceBitPreview} | Bob {bb84.bobBitPreview}</code></p>}
@@ -61,6 +62,7 @@ function NodeCrypto({ step, crypto }) {
         <p><span>AES key</span><code>{crypto.aesKeyFingerprint}... ({crypto.aesKeyLengthBits} bits)</code></p>
         <p><span>IV</span><code>{crypto.ivPreview}...</code></p>
         <p><span>Ciphertext</span><code>{crypto.ciphertextPreview}...</code></p>
+        {crypto.tagPreview && <p><span>AES HMAC tag</span><code>{crypto.tagPreview}...</code></p>}
         <p><span>BB84 bases</span><code>Alice {sender.aliceBasisPreview} | Bob {sender.bobBasisPreview}</code></p>
         <p><span>Bits</span><code>Alice {sender.aliceBitPreview} | Bob {sender.bobBitPreview}</code></p>
         <p><span>Keep / sifted</span><code>{sender.keepPreview} / {sender.siftedPreview}</code></p>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import socket
 import time
 from secrets import token_hex
@@ -17,6 +18,16 @@ def _key_fingerprint(key: bytes | str) -> str:
     if isinstance(key, bytes):
         return key.hex()[:12]
     return key[:12]
+
+
+def _tamper_payload(payload: dict[str, str]) -> dict[str, str]:
+    """Flip one ciphertext bit so the HMAC tag no longer verifies."""
+    tampered = dict(payload)
+    ciphertext = bytearray(base64.b64decode(str(tampered["ciphertext"])))
+    if ciphertext:
+        ciphertext[0] ^= 0x01
+    tampered["ciphertext"] = base64.b64encode(bytes(ciphertext)).decode("ascii")
+    return tampered
 
 
 def _log_bb84(node_name: str, result: bb84.BB84Result) -> None:
@@ -55,12 +66,9 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
     )
     _log_bb84(node_name, key_result)
 
-    # Only inspect for MITM flag if this is the target node
-    mitm_flag = bool(packet.get("mitm")) and is_target
     detection = attack_detector.inspect_packet(
         str(packet["nonce"]),
         key_result.error_rate,
-        mitm_flag=mitm_flag,
     )
 
     if not detection.ok:
@@ -82,18 +90,16 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
             detectionReason=detection.reason,
             attackMode=mode,
             targetNode=attack_detector.get_target_node(),
-            packetHadMitmFlag=bool(packet.get("mitm")),
             inspectedAtTarget=is_target,
             previousHop=previous_hop,
             nextHop=next_hop,
-            detectionCheckpoint="before AES decrypt",
+            detectionCheckpoint="nonce and BB84 checks before AES decrypt",
             detectionEvidence=[
                 f"Packet arrived at {node_name} from {previous_hop}.",
                 f"Dashboard target node is {attack_detector.get_target_node()}. This node {'matches' if is_target else 'does not match'} that target.",
-                f"Packet MITM marker is {'present' if bool(packet.get('mitm')) else 'absent'}.",
                 f"Nonce preview {str(packet['nonce'])[:12]}... was checked before decryption.",
-                f"BB84 error rate was {round(key_result.error_rate * 100)}%, so this was not blocked because of eavesdropping noise.",
-                "Because the MITM marker was present at the targeted node, the node refused to decrypt and the router blocked this hop.",
+                f"BB84 error rate was {round(key_result.error_rate * 100)}%.",
+                f"The packet was blocked because {detection.reason}.",
             ],
             errorRate=key_result.error_rate,
             errorThreshold=config.ERROR_THRESHOLD,
@@ -102,15 +108,65 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
         )
         return None
 
-    plaintext = crypto_utils.decrypt_message(packet["payload"], packet["key"])
+    working_payload = packet["payload"]
+    mitm_tampered = mode == "mitm" and is_target
+    if mitm_tampered:
+        working_payload = _tamper_payload(packet["payload"])
+
+    try:
+        plaintext = crypto_utils.decrypt_message(working_payload, packet["key"])
+    except Exception as exc:
+        router.block_node(node_name)
+        attack_detector.store_intercepted({
+            "node": node_name,
+            "ciphertextPreview": working_payload.get("ciphertext", "")[:32],
+            "ivPreview": working_payload.get("iv", "")[:16],
+            "realKeyFingerprint": _key_fingerprint(packet["key"]),
+            "errorRate": key_result.error_rate,
+            "reason": str(exc),
+        })
+        logger.emit_event(
+            node_name,
+            "MITM tampering detected by AES integrity check" if mitm_tampered else "Packet decryption failed",
+            "attack",
+            phase="attack-detected",
+            detectionReason=str(exc),
+            attackMode=mode,
+            targetNode=attack_detector.get_target_node(),
+            inspectedAtTarget=is_target,
+            previousHop=previous_hop,
+            nextHop=next_hop,
+            detectionCheckpoint="AES HMAC verification before plaintext release",
+            integrityTagPresent=bool(packet["payload"].get("tag")),
+            ciphertextTampered=mitm_tampered,
+            detectionEvidence=[
+                f"Packet arrived at {node_name} from {previous_hop}.",
+                f"The attacker modified the ciphertext in transit at {node_name}.",
+                "The attacker did not know the hop AES key, so it could not create a valid HMAC tag for the modified ciphertext.",
+                "Before decrypting, the node recalculated the HMAC over IV + ciphertext using the hop key.",
+                f"Calculated tag did not match the packet tag: {str(exc)}.",
+                f"{node_name} blocked the packet and the router removed this hop from the active route.",
+            ],
+            errorRate=key_result.error_rate,
+            errorThreshold=config.ERROR_THRESHOLD,
+            noncePreview=str(packet["nonce"])[:12],
+            blockedNode=node_name,
+            ivPreview=working_payload.get("iv", "")[:12],
+            ciphertextPreview=working_payload.get("ciphertext", "")[:16],
+            tagPreview=working_payload.get("tag", "")[:16],
+            keyFingerprint=_key_fingerprint(packet["key"]),
+        )
+        return None
+
     logger.emit_event(
         node_name,
         "AES-CBC decrypted packet from previous hop",
         "info",
         phase="aes-decrypt",
         plaintextLength=len(plaintext),
-        ivPreview=packet["payload"]["iv"][:12],
-        ciphertextPreview=packet["payload"]["ciphertext"][:16],
+        ivPreview=working_payload["iv"][:12],
+        ciphertextPreview=working_payload["ciphertext"][:16],
+        tagPreview=working_payload.get("tag", "")[:16],
         keyFingerprint=_key_fingerprint(packet["key"]),
         previousHop=previous_hop,
         nextHop=next_hop,
@@ -120,17 +176,6 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
             "recover the plaintext inside this hop, and prepare it for re-encryption."
         ),
     )
-
-    # If MITM mode and this is the target, store intercepted data for the challenge
-    if mode == "mitm" and is_target:
-        attack_detector.store_intercepted({
-            "node": node_name,
-            "ciphertextPreview": packet["payload"].get("ciphertext", "")[:32],
-            "ivPreview": packet["payload"].get("iv", "")[:16],
-            "realKeyFingerprint": _key_fingerprint(packet["key"]),
-            "plaintextLength": len(plaintext),
-            "errorRate": key_result.error_rate,
-        })
 
     next_key = key_result.key
     next_payload = crypto_utils.encrypt_message(plaintext, next_key)
@@ -142,6 +187,7 @@ def process_packet(node_name: str, packet: dict[str, object]) -> dict[str, objec
         plaintextLength=len(plaintext),
         ivPreview=next_payload["iv"][:12],
         ciphertextPreview=next_payload["ciphertext"][:16],
+        tagPreview=next_payload.get("tag", "")[:16],
         keyFingerprint=_key_fingerprint(next_key),
         previousHop=node_name,
         nextHop=next_hop,

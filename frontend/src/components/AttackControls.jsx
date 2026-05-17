@@ -13,7 +13,7 @@ const modes = [
     id: "mitm",
     label: "MITM",
     Icon: UserRoundX,
-    description: "Man-in-the-Middle - attacker relay forwards the packet; receiver blocks it from relay metadata before decrypting.",
+    description: "Man-in-the-Middle - attacker tampers with ciphertext; receiver blocks it when AES integrity verification fails.",
     color: "red",
   },
   {

@@ -101,8 +101,11 @@ function stepSummary(event) {
     if (event.detectionCheckpoint) summaryLines.push(`Checked at: ${event.detectionCheckpoint}`);
     if (event.attackMode) summaryLines.push(`Selected attack mode: ${event.attackMode}`);
     if (event.targetNode) summaryLines.push(`Configured attack target: ${labelNode(event.targetNode)}`);
-    if (event.packetHadMitmFlag !== undefined) {
-      summaryLines.push(`MITM marker in packet: ${event.packetHadMitmFlag ? "present" : "absent"}`);
+    if (event.integrityTagPresent !== undefined) {
+      summaryLines.push(`AES integrity tag present: ${event.integrityTagPresent ? "yes" : "no"}`);
+    }
+    if (event.ciphertextTampered !== undefined) {
+      summaryLines.push(`Ciphertext tampered in transit: ${event.ciphertextTampered ? "yes" : "no"}`);
     }
     if (event.inspectedAtTarget !== undefined) {
       summaryLines.push(`This node is the selected target: ${event.inspectedAtTarget ? "yes" : "no"}`);
@@ -145,10 +148,11 @@ function StepDetail({ event }) {
       {expanded && (
         <div className="journeyStepExpanded">
           {event.phase === "bb84" && <BB84MiniTable event={event} />}
-          {(event.ivPreview || event.ciphertextPreview || event.decryptedPreview) && (
+          {(event.ivPreview || event.ciphertextPreview || event.tagPreview || event.decryptedPreview) && (
             <div className="technicalDetails">
               {event.ivPreview && <code>IV: {event.ivPreview}...</code>}
               {event.ciphertextPreview && <code>Cipher: {event.ciphertextPreview}...</code>}
+              {event.tagPreview && <code>HMAC tag: {event.tagPreview}...</code>}
               {event.decryptedPreview && <code>Plaintext preview: {event.decryptedPreview}</code>}
             </div>
           )}
@@ -197,8 +201,8 @@ function OutcomeBanner({ events }) {
     const attack = attackEvents[0];
     const reason = attack?.detectionReason || attack?.message || "Attack detected";
     const blockedAt = attack?.blockedNode || attack?.source || "unknown node";
-    const mitmCopy = attack?.packetHadMitmFlag
-      ? "The packet carried the MITM marker at the selected target node, so it was blocked before AES decryption."
+    const mitmCopy = attack?.ciphertextTampered
+      ? "The ciphertext was changed in transit, and the AES HMAC tag failed before plaintext was released."
       : "The node failed one of the security checks, so it was blocked before the route continued.";
 
     return (
