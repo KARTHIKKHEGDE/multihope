@@ -11,13 +11,42 @@ import HopFlow from "./components/HopFlow.jsx";
 import ErrorRateBar from "./components/ErrorRateBar.jsx";
 import LiveLog from "./components/LiveLog.jsx";
 import PacketJourney from "./components/PacketJourney.jsx";
+import AttackControls from "./components/AttackControls.jsx";
 
 const attackModes = [
-  { id: "normal", label: "Direct (Secure)", Icon: Shield, color: "teal", desc: "Send directly — BB84 key exchange is honest, no interference." },
-  { id: "mitm", label: "MITM Relay", Icon: UserRoundX, color: "red", desc: "Route through an attacker machine — receiver detects high BB84 error rate." },
-  { id: "eavesdrop", label: "Eavesdrop", Icon: RadioTower, color: "orange", desc: "Attacker passively monitors — quantum disturbance still detected." },
-  { id: "replay", label: "Replay", Icon: Repeat, color: "purple", desc: "Resend a captured packet — duplicate nonce detected." },
+  { id: "normal", label: "Normal send", Icon: Shield, color: "teal", desc: "All 3 hops forward the encrypted packet safely. Receiver decrypts it." },
+  { id: "mitm", label: "Random MITM", Icon: UserRoundX, color: "red", desc: "One of the 3 hops is randomly attacked. Receiver blocks the packet and shows the exact hop." },
+  { id: "eavesdrop", label: "Eavesdrop", Icon: RadioTower, color: "orange", desc: "The BB84 channel is disturbed while crossing the hops. Receiver blocks if the error rate is too high." },
+  { id: "replay", label: "Replay", Icon: Repeat, color: "purple", desc: "The same packet is sent again through the 3 hops. Receiver blocks the duplicate nonce." },
 ];
+
+function getReceiverResult(sendResult) {
+  return sendResult?.result?.result || sendResult?.result || sendResult;
+}
+
+function SendExplanation({ sendResult }) {
+  if (!sendResult) return null;
+  const receiverResult = getReceiverResult(sendResult);
+  const steps = receiverResult?.routeSteps || [];
+  const blocked = receiverResult?.attackDetected || receiverResult?.ok === false;
+
+  return (
+    <div className={`sendExplanation ${blocked ? "blocked" : "delivered"}`}>
+      <strong>{blocked ? "Receiver blocked the message" : "Receiver accepted the message"}</strong>
+      {receiverResult?.attackType && <p>{receiverResult.attackType}</p>}
+      {steps.length > 0 && (
+        <ol>
+          {steps.map((step, index) => (
+            <li key={`${step.node}-${index}`}>
+              <span>{index + 1}. {step.node}</span>
+              <p>{step.detail}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   // Peer state
@@ -29,7 +58,6 @@ export default function App() {
   const [message, setMessage] = useState("");
   const [targetIp, setTargetIp] = useState("");
   const [attackMode, setAttackMode] = useState("normal");
-  const [relayIp, setRelayIp] = useState("");
   const [busy, setBusy] = useState(false);
   const [sendResult, setSendResult] = useState(null);
 
@@ -89,20 +117,10 @@ export default function App() {
     const targetPeerObj = peers.find((p) => p.ip === targetIp);
     const targetSocketPort = targetPeerObj?.socketPort || 5010;
 
-    let relaySocketPort = 5010;
-    if (relayIp) {
-      if (selfInfo && relayIp === selfInfo.ip) {
-        relaySocketPort = selfInfo.socketPort || 5010;
-      } else {
-        const relayPeerObj = peers.find((p) => p.ip === relayIp);
-        relaySocketPort = relayPeerObj?.socketPort || 5010;
-      }
-    }
-
     try {
       const result = await sendToPeer(
         message.trim(), targetIp, targetSocketPort,
-        attackMode, relayIp || "", relaySocketPort
+        attackMode, "", 5010
       );
       setSendResult(result);
       setMessage("");
@@ -121,9 +139,9 @@ export default function App() {
     setBusy(false);
   }
 
-  const needsRelay = attackMode === "mitm" || attackMode === "eavesdrop";
   const activeAttack = attackModes.find((m) => m.id === attackMode) || attackModes[0];
   const targetPeer = peers.find((p) => p.ip === targetIp);
+  const pathText = `Path: You -> Hop 1 -> Hop 2 -> Hop 3 -> ${targetPeer?.name || "receiver"}`;
 
   return (
     <main className="shell">
@@ -216,23 +234,6 @@ export default function App() {
                   </select>
                 </div>
 
-                {needsRelay && (
-                  <div className="sendOption">
-                    <label>Relay via:</label>
-                    <select value={relayIp} onChange={(e) => setRelayIp(e.target.value)}>
-                      <option value="">Select attacker machine…</option>
-                      {selfInfo && (
-                        <option value={selfInfo.ip}>Self (Simulate Attacker on this machine)</option>
-                      )}
-                      {peers.filter((p) => p.ip !== targetIp).map((p) => (
-                        <option key={p.ip} value={p.ip}>
-                          {p.name} ({p.ip})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
                 <button type="submit" className="sendBtn" disabled={busy || !targetIp || !message.trim()}>
                   <Send size={16} />
                   {busy ? "Sending…" : "Send Securely"}
@@ -241,17 +242,22 @@ export default function App() {
 
               <div className={`attackDesc ${attackMode !== "normal" ? "warning" : ""}`}>
                 <activeAttack.Icon size={14} />
-                <p>{activeAttack.desc}</p>
+                <p><strong>{pathText}</strong> {activeAttack.desc}</p>
               </div>
             </form>
 
             {sendResult && (
-              <div className={`sendResult ${sendResult.ok ? "success" : "error"}`}>
-                {sendResult.ok
-                  ? `✅ Message delivered${sendResult.relay ? " via relay" : " directly"}!`
-                  : `❌ ${sendResult.error || "Send failed"}`
-                }
-              </div>
+              <>
+                <div className={`sendResult ${getReceiverResult(sendResult)?.attackDetected || !sendResult.ok ? "error" : "success"}`}>
+                  {sendResult.ok
+                    ? getReceiverResult(sendResult)?.attackDetected
+                      ? "Message reached receiver, but attack detection blocked it."
+                      : "Message delivered through 3 hops."
+                    : `${sendResult.error || "Send failed"}`
+                  }
+                </div>
+                <SendExplanation sendResult={sendResult} />
+              </>
             )}
           </section>
 
@@ -303,20 +309,12 @@ export default function App() {
           <div className="split">
             <section>
               <ErrorRateBar value={metrics.latestErrorRate} />
-              {/* AttackControls kept for simulation mode */}
-              {(() => {
-                const AttackControls = React.lazy(() => import("./components/AttackControls.jsx"));
-                return (
-                  <React.Suspense fallback={null}>
-                    <AttackControls
-                      currentMode={simAttackMode}
-                      targetNode={targetNode}
-                      intercepted={intercepted}
-                      onChange={refreshAll}
-                    />
-                  </React.Suspense>
-                );
-              })()}
+              <AttackControls
+                currentMode={simAttackMode}
+                targetNode={targetNode}
+                intercepted={intercepted}
+                onChange={refreshAll}
+              />
             </section>
             <LiveLog events={events} />
           </div>

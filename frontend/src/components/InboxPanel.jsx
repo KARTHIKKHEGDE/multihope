@@ -1,4 +1,17 @@
-import { ShieldCheck, ShieldAlert, Inbox, Trash2, User, Clock, Zap, AlertTriangle } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldAlert,
+  Inbox,
+  Trash2,
+  User,
+  Clock,
+  Zap,
+  AlertTriangle,
+  Route,
+  CheckCircle2,
+  XCircle,
+  CircleAlert,
+} from "lucide-react";
 
 function formatTime(iso) {
   if (!iso) return "";
@@ -24,7 +37,7 @@ function AttackBanner({ msg }) {
 }
 
 function BB84Badge({ details }) {
-  if (!details?.errorRate === undefined) return null;
+  if (details?.errorRate === undefined) return null;
   const pct = Math.round((details.errorRate || 0) * 100);
   const threshold = Math.round((details.errorThreshold || 0.15) * 100);
   const safe = pct <= threshold;
@@ -35,6 +48,42 @@ function BB84Badge({ details }) {
       &nbsp;·&nbsp;
       Key: <code>{details.keyFingerprint}…</code>
     </div>
+  );
+}
+
+function stepIcon(status) {
+  if (status === "attack") return <XCircle size={14} />;
+  if (status === "warning") return <CircleAlert size={14} />;
+  return <CheckCircle2 size={14} />;
+}
+
+function NodeSteps({ msg }) {
+  const steps = msg.routeSteps || [];
+  if (steps.length === 0) return null;
+
+  return (
+    <details className="nodeSteps">
+      <summary>
+        <Route size={14} />
+        <span>Node steps</span>
+      </summary>
+      <ol className="nodeStepList">
+        {steps.map((step, index) => (
+          <li key={`${msg.id}-${step.node}-${index}`} className={`nodeStep ${step.status || "success"}`}>
+            <div className="nodeStepIcon">{stepIcon(step.status)}</div>
+            <div className="nodeStepBody">
+              <div className="nodeStepTop">
+                <strong>{index + 1}. {step.node}</strong>
+                <span>{step.name}</span>
+                {step.ip && <code>{step.ip}</code>}
+              </div>
+              <p>{step.title}</p>
+              <small>{step.detail}</small>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 
@@ -96,6 +145,7 @@ export default function InboxPanel({ messages, onClear }) {
               </div>
 
               <BB84Badge details={msg.bb84Details} />
+              <NodeSteps msg={msg} />
             </div>
           ))}
         </div>

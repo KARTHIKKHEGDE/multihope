@@ -46,9 +46,121 @@ import json
 import socket
 import threading
 import time
-from secrets import token_hex
+from secrets import randbelow, token_hex
 
-from . import attack_detector, bb84, config, crypto_utils, inbox, logger
+from . import attack_detector, bb84, config, crypto_utils, inbox, logger, peer_discovery
+
+
+def _build_route_steps(
+    *,
+    attack_mode: str,
+    sender_name: str,
+    sender_ip: str,
+    target_name: str,
+    target_ip: str,
+    virtual_hops: list[dict],
+    attack_hop: int | None,
+    nonce: str,
+    nonce_ok: bool,
+    error_rate: float,
+    attack_detected: bool,
+    attack_type: str,
+    bb84_details: dict,
+) -> list[dict]:
+    """Create a compact receiver-side explanation for the inbox timeline."""
+    error_pct = round(error_rate * 100)
+    threshold_pct = round(config.ERROR_THRESHOLD * 100)
+    nonce_preview = nonce[:12] or "missing"
+    steps = [{
+        "node": "Sender laptop",
+        "name": sender_name,
+        "ip": sender_ip,
+        "status": "success",
+        "title": "Message encrypted",
+        "detail": (
+            f"Plain text was encrypted with AES. Packet nonce {nonce_preview}... and "
+            f"mode={attack_mode} were added before sending."
+        ),
+    }]
+
+    for hop in virtual_hops:
+        hop_number = int(hop.get("number", 0))
+        hop_attacked = attack_mode == "mitm" and hop_number == attack_hop
+        if hop_attacked:
+            title = "MITM happened at this hop"
+            detail = (
+                "A man-in-the-middle touched this hop in the simulated route. "
+                "The packet is marked as MITM, so the receiver must block it before decrypting."
+            )
+            status = "attack"
+        elif attack_mode == "eavesdrop":
+            title = "Quantum channel checked at this hop"
+            detail = "Eavesdrop mode disturbs BB84 qubits while the packet crosses the route."
+            status = "warning"
+        elif attack_mode == "replay":
+            title = "Packet forwarded"
+            detail = "This hop forwards the same encrypted packet; the receiver will catch replay using the nonce."
+            status = "warning"
+        else:
+            title = "Packet forwarded safely"
+            detail = "No attack detected at this hop. The encrypted packet continues to the next hop."
+            status = "success"
+
+        steps.append({
+            "node": f"Hop {hop_number}",
+            "name": hop.get("name", f"Network hop {hop_number}"),
+            "ip": hop.get("ip", ""),
+            "status": status,
+            "title": title,
+            "detail": detail,
+        })
+
+    steps.append({
+        "node": "Receiver check",
+        "name": config.MACHINE_NAME,
+        "ip": config.LOCAL_IP,
+        "status": "success" if nonce_ok else "attack",
+        "title": "Nonce replay check",
+        "detail": (
+            f"Nonce {nonce_preview}... was {'fresh' if nonce_ok else 'already seen in the replay cache'}."
+        ),
+    })
+
+    if attack_detected:
+        if attack_mode == "mitm":
+            detail = (
+                f"Blocked before decrypting because MITM was detected on Hop {attack_hop}. "
+                "The receiver saw mode=mitm in the packet metadata."
+            )
+        elif attack_mode == "replay":
+            detail = f"Blocked because nonce {nonce_preview}... matched a recently received packet."
+        else:
+            detail = (
+                f"Blocked because BB84 error rate was {error_pct}%, above the {threshold_pct}% threshold. "
+                f"Matching bases: {bb84_details.get('matchingBases')}, sifted bits: {bb84_details.get('siftedBits')}."
+            )
+        steps.append({
+            "node": "Receiver",
+            "name": target_name or config.MACHINE_NAME,
+            "ip": target_ip or config.LOCAL_IP,
+            "status": "attack",
+            "title": "Attack detected and message blocked",
+            "detail": detail,
+        })
+    else:
+        steps.append({
+            "node": "Receiver",
+            "name": target_name or config.MACHINE_NAME,
+            "ip": target_ip or config.LOCAL_IP,
+            "status": "success",
+            "title": "Packet verified and decrypted",
+            "detail": (
+                f"Nonce was fresh, BB84 error rate was {error_pct}% within the {threshold_pct}% threshold, "
+                "and AES decryption succeeded."
+            ),
+        })
+
+    return steps
 
 # ─── Outbound: send a JSON envelope over a raw TCP socket ─────────────────────
 
@@ -67,6 +179,13 @@ def _send_envelope(host: str, port: int, envelope: dict) -> dict:
     return json.loads(b"".join(chunks).decode("utf-8"))
 
 
+def _usable_sender_ip(sender_ip: str, peer_addr: str) -> str:
+    """Prefer the real socket address when packet metadata is missing or loopback."""
+    if not sender_ip or sender_ip.startswith("127.") or sender_ip == "0.0.0.0":
+        return peer_addr
+    return sender_ip
+
+
 def send_message_to_peer(
     message: str,
     target_ip: str,
@@ -82,6 +201,12 @@ def send_message_to_peer(
     # BB84 key exchange + AES encrypt
     key_result = bb84.establish_key()
     payload = crypto_utils.encrypt_message(message, key_result.key)
+    virtual_hops = [
+        {"number": 1, "name": "Network hop 1", "ip": "virtual-hop-1"},
+        {"number": 2, "name": "Network hop 2", "ip": "virtual-hop-2"},
+        {"number": 3, "name": "Network hop 3", "ip": "virtual-hop-3"},
+    ]
+    attack_hop = randbelow(3) + 1 if attack_mode == "mitm" else None
 
     packet = {
         "payload": payload,
@@ -90,6 +215,11 @@ def send_message_to_peer(
         "timestamp": time.time(),
         "route": [config.MACHINE_NAME],
         "errorRate": key_result.error_rate,
+        "routeMeta": {
+            "targetIp": target_ip,
+            "virtualHops": virtual_hops,
+            "attackHop": attack_hop,
+        },
     }
 
     logger.emit_event(
@@ -102,6 +232,8 @@ def send_message_to_peer(
         plaintextLength=len(message),
         ivPreview=payload["iv"][:12],
         ciphertextPreview=payload["ciphertext"][:16],
+        virtualHops=virtual_hops,
+        attackHop=attack_hop,
     )
 
     # Route via MITM relay if attacker machine is specified
@@ -116,6 +248,17 @@ def send_message_to_peer(
             "targetPort": target_port,
         }
         try:
+            if attack_mode == "replay":
+                first_resp = _send_envelope(relay_ip, relay_port or config.PEER_SOCKET_PORT, envelope)
+                second_resp = _send_envelope(relay_ip, relay_port or config.PEER_SOCKET_PORT, envelope)
+                return {
+                    "ok": True,
+                    "relay": True,
+                    "replayed": True,
+                    "relayIp": relay_ip,
+                    "firstResult": first_resp,
+                    "result": second_resp,
+                }
             resp = _send_envelope(relay_ip, relay_port or config.PEER_SOCKET_PORT, envelope)
             return {"ok": True, "relay": True, "relayIp": relay_ip, "result": resp}
         except Exception as exc:
@@ -131,6 +274,16 @@ def send_message_to_peer(
         "attackMode": attack_mode,
     }
     try:
+        if attack_mode == "replay":
+            first_resp = _send_envelope(target_ip, target_port, envelope)
+            second_resp = _send_envelope(target_ip, target_port, envelope)
+            return {
+                "ok": True,
+                "relay": False,
+                "replayed": True,
+                "firstResult": first_resp,
+                "result": second_resp,
+            }
         resp = _send_envelope(target_ip, target_port, envelope)
         return {"ok": True, "relay": False, "result": resp}
     except Exception as exc:
@@ -144,8 +297,18 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
     """Process a direct 'message' envelope — receiver side."""
     packet      = envelope.get("packet", {})
     sender_name = envelope.get("senderName", peer_addr)
-    sender_ip   = envelope.get("senderIp", peer_addr)
+    sender_ip   = _usable_sender_ip(envelope.get("senderIp", ""), peer_addr)
     attack_mode = envelope.get("attackMode", "normal")
+    relay_name  = envelope.get("relayName", "")
+    relay_ip    = envelope.get("relayIp", "")
+    route_meta  = packet.get("routeMeta", {})
+    virtual_hops = route_meta.get("virtualHops") or [
+        {"number": 1, "name": "Network hop 1", "ip": "virtual-hop-1"},
+        {"number": 2, "name": "Network hop 2", "ip": "virtual-hop-2"},
+        {"number": 3, "name": "Network hop 3", "ip": "virtual-hop-3"},
+    ]
+    attack_hop = route_meta.get("attackHop")
+    peer_discovery.remember_peer(sender_name, sender_ip)
 
     # BB84 key exchange for this hop (simulates quantum channel)
     is_eavesdrop = attack_mode == "eavesdrop"
@@ -180,7 +343,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         attack_type = "Replay Attack - duplicate nonce detected"
     elif is_mitm:
         attack_detected = True
-        attack_type = "Man-in-the-Middle - packet was relayed through an attacker machine"
+        attack_type = f"Man-in-the-Middle - attack detected at Hop {attack_hop}"
     elif attack_detector.is_error_rate_attack(error_rate):
         attack_detected = True
         attack_type = (
@@ -188,6 +351,22 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             f"{round(error_rate * 100)}% exceeded "
             f"{round(config.ERROR_THRESHOLD * 100)}% threshold"
         )
+
+    route_steps = _build_route_steps(
+        attack_mode=attack_mode,
+        sender_name=sender_name,
+        sender_ip=sender_ip,
+        target_name=config.MACHINE_NAME,
+        target_ip=config.LOCAL_IP,
+        virtual_hops=virtual_hops,
+        attack_hop=attack_hop,
+        nonce=nonce,
+        nonce_ok=nonce_result.ok,
+        error_rate=error_rate,
+        attack_detected=attack_detected,
+        attack_type=attack_type,
+        bb84_details=bb84_details,
+    )
 
     if attack_detected:
         logger.emit_event(
@@ -208,6 +387,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             comparedBits=key_result.compared_bits,
             generatedBits=key_result.generated_bits,
             keyFingerprint=key_result.key.hex()[:12],
+            routeSteps=route_steps,
         )
         inbox.add_message(
             plaintext="[MESSAGE BLOCKED - attack detected]",
@@ -216,13 +396,18 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
             error_rate=error_rate,
             attack_detected=True,
             attack_type=attack_type,
+            relay_name=relay_name,
+            relay_ip=relay_ip,
             bb84_details=bb84_details,
+            route_steps=route_steps,
         )
         return {
             "ok": False,
             "attackDetected": True,
             "attackType": attack_type,
             "errorRate": error_rate,
+            "routeSteps": route_steps,
+            "bb84Details": bb84_details,
         }
 
     # Decrypt — packet["key"] is already a sha256-derived 32-byte key in hex;
@@ -242,6 +427,7 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         senderName=sender_name,
         senderIp=sender_ip,
         bb84Details=bb84_details,
+        routeSteps=route_steps,
     )
 
     inbox.add_message(
@@ -250,10 +436,19 @@ def _handle_message(envelope: dict, peer_addr: str) -> dict:
         sender_ip=sender_ip,
         error_rate=error_rate,
         attack_detected=False,
+        relay_name=relay_name,
+        relay_ip=relay_ip,
         bb84_details=bb84_details,
+        route_steps=route_steps,
     )
 
-    return {"ok": True, "plaintext": plaintext, "errorRate": error_rate}
+    return {
+        "ok": True,
+        "plaintext": plaintext,
+        "errorRate": error_rate,
+        "routeSteps": route_steps,
+        "bb84Details": bb84_details,
+    }
 
 
 def _handle_relay(envelope: dict, peer_addr: str) -> dict:
@@ -263,7 +458,8 @@ def _handle_relay(envelope: dict, peer_addr: str) -> dict:
     """
     packet      = envelope.get("packet", {})
     sender_name = envelope.get("senderName", peer_addr)
-    sender_ip   = envelope.get("senderIp", peer_addr)
+    sender_ip   = _usable_sender_ip(envelope.get("senderIp", ""), peer_addr)
+    peer_discovery.remember_peer(sender_name, sender_ip)
     target_ip   = envelope.get("targetIp", "")
     target_port = int(envelope.get("targetPort", config.PEER_SOCKET_PORT))
     attack_mode = envelope.get("attackMode", "mitm")

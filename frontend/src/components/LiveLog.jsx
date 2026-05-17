@@ -18,6 +18,20 @@ export default function LiveLog({ events }) {
             <article className={`logItem ${event.status}`} key={`${event.time}-${index}`}>
               <span>{event.source}</span>
               <p>{event.message}</p>
+              {event.detectionReason && <small>{event.detectionReason}</small>}
+              {event.routeSteps?.length > 0 && (
+                <details className="logDetails">
+                  <summary>What happened?</summary>
+                  <ol>
+                    {event.routeSteps.map((step, stepIndex) => (
+                      <li key={`${event.time}-${step.node}-${stepIndex}`}>
+                        <strong>{step.node}</strong>
+                        <p>{step.detail}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
               <time>{new Date(event.time).toLocaleTimeString()}</time>
             </article>
           ))}

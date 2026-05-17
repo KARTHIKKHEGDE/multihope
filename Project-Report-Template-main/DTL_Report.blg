@@ -1,0 +1,68 @@
+This is BibTeX, Version 0.99e
+Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
+The top-level auxiliary file: DTL_Report.aux
+Reallocating 'name_of_file' (item size: 1) to 9 items.
+The style file: biblatex.bst
+Reallocating 'name_of_file' (item size: 1) to 15 items.
+Reallocating 'name_of_file' (item size: 1) to 22 items.
+Reallocating 'glb_str_end' (item size: 4) to 20 items.
+Reallocating 'glb_str_ptr' (item size: 4) to 20 items.
+Reallocating 'global_strs' (item size: 1) to 4000000 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'wiz_functions' (item size: 4) to 6000 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+Database file #1: DTL_Report-blx.bib
+Database file #2: ./AuxFiles/ProjectBib.bib
+Biblatex version: 3.21
+Reallocating 'wiz_functions' (item size: 4) to 9000 items.
+Reallocating 'singl_function' (item size: 4) to 100 items.
+You've used 9 entries,
+            6402 wiz_defined-function locations,
+            1266 strings with 10358 characters,
+and the built_in function-call counts, 57560 in all, are:
+= -- 4325
+> -- 1399
+< -- 273
++ -- 1790
+- -- 754
+* -- 3778
+:= -- 6403
+add.period$ -- 0
+call.type$ -- 9
+change.case$ -- 146
+chr.to.int$ -- 90
+cite$ -- 16
+duplicate$ -- 5376
+empty$ -- 5115
+format.name$ -- 454
+if$ -- 11633
+int.to.chr$ -- 0
+int.to.str$ -- 21
+missing$ -- 0
+newline$ -- 235
+num.names$ -- 404
+pop$ -- 2804
+preamble$ -- 1
+purify$ -- 185
+quote$ -- 0
+skip$ -- 1629
+stack$ -- 0
+substring$ -- 8185
+swap$ -- 1107
+text.length$ -- 211
+text.prefix$ -- 0
+top$ -- 1
+type$ -- 294
+warning$ -- 0
+while$ -- 695
+width$ -- 0
+write$ -- 227

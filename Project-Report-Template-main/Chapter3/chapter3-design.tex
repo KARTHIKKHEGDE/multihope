@@ -1,140 +1,119 @@
-\chapter{Architecture}
+\chapter{System Design and Architecture}
 
-The architecture of the Secure File System is designed to provide a layered and modular approach for secure file transfer. The system combines a web application layer, authentication layer, cryptographic layer, steganographic layer, database layer, and storage layer. Each layer performs a specific responsibility and communicates with the other layers through well-defined data flow.
+The QuantumHop system is designed as a two-tier, peer-to-peer secure communication platform. The backend tier, implemented in Python, handles all cryptographic operations, socket communication, peer discovery, attack detection, and event logging. The frontend tier, implemented in React, provides a real-time dashboard for message composition, peer management, inbox display, and attack alerts. The two tiers communicate through a local Flask REST API that bridges the browser to the underlying socket layer.
 
-The main idea of the architecture is to ensure that the uploaded file is never directly exposed to the receiver or stored as plain data after processing. The sender uploads a file through the Flask web interface. The backend encrypts the file using AES-GCM, protects the AES key using RSA, embeds the encrypted payload into a cover image using LSB steganography, stores required metadata in SQLite, and displays the stego image only to the intended receiver. The receiver extracts and decrypts the hidden payload to recover the original file.
+\section{Overall System Architecture}
 
-\section{Architecture Diagram}
-
-Figure \ref{fig:secure-file-system-architecture} shows the overall architecture of the Secure File System. The architecture is divided into sender-side operations, backend security processing, metadata storage, receiver-side operations, and output recovery.
+The overall architecture of the QuantumHop system is shown in Figure~\ref{fig:quantumhop-architecture}. The system is composed of five major subsystems: the UDP Discovery Layer, the BB84 QKD Engine, the TCP Socket Layer, the Flask API Gateway, and the React Dashboard.
 
 \begin{figure}[htb]
 \centering
 \begin{tikzpicture}[
-    node distance=1.15cm,
+    node distance=1.2cm,
     every node/.style={font=\small},
-    process/.style={rectangle, draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.9cm, fill=blue!8},
-    security/.style={rectangle, draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.9cm, fill=green!10},
-    store/.style={cylinder, draw, shape border rotate=90, align=center, minimum width=2.8cm, minimum height=1.0cm, fill=orange!15},
+    layer/.style={rectangle, draw, rounded corners, align=center, minimum width=10cm, minimum height=0.9cm, fill=blue!8},
+    module/.style={rectangle, draw, rounded corners, align=center, minimum width=3.0cm, minimum height=0.85cm, fill=green!10},
+    attack/.style={rectangle, draw, dashed, rounded corners, align=center, minimum width=3.0cm, minimum height=0.85cm, fill=red!8},
     arrow/.style={->, thick}
 ]
 
-\node[process] (login) {User Login\\Challenge-Response};
-\node[process, below=of login] (upload) {File Upload\\Receiver Selection};
-\node[security, below=of upload] (encrypt) {AES-GCM Encryption\\File + Metadata};
-\node[security, below=of encrypt] (rsa) {RSA Key Protection\\Encrypt AES Key};
-\node[security, below=of rsa] (stego) {LSB Steganography\\Embed Payload in Image};
+\node[layer] (dashboard) {React Dashboard (Vite, port 5173) --- Peers · Inbox · BB84 Monitor · Attack Alerts};
+\node[layer, below=of dashboard] (flask) {Flask API Gateway (port 5000) --- /api/send-to-peer · /api/peers · /api/inbox · /api/events};
+\node[layer, below=of flask] (bb84) {BB84 QKD Engine --- Bit generation · Basis sifting · Error rate · SHA-256 key derivation};
+\node[layer, below=of bb84] (crypto) {AES-256-CBC Crypto Layer --- encrypt\_message() · decrypt\_message() · derive\_aes\_key()};
+\node[layer, below=of crypto] (socket) {Raw TCP Socket Layer (port 5010) --- send\_message\_to\_peer() · \_handle\_message() · \_handle\_relay()};
+\node[layer, below=of socket] (udp) {UDP Discovery Layer (port 5555) --- Broadcast heartbeat · Peer registry · Peer timeout cleanup};
 
-\node[store, right=2.7cm of rsa] (db) {SQLite\\Metadata};
-\node[store, right=2.7cm of stego] (storage) {Storage\\Stego Image};
-
-\node[process, right=2.7cm of upload] (receiver) {Receiver Dashboard\\Received Files};
-\node[security, right=2.7cm of encrypt] (extract) {Payload Extraction\\Using Seed + Length};
-\node[security, right=2.7cm of login] (decrypt) {RSA + AES Decryption\\Recover File};
-\node[process, above=of decrypt] (output) {Decrypted File\\Original Filename};
-
-\draw[arrow] (login) -- (upload);
-\draw[arrow] (upload) -- (encrypt);
-\draw[arrow] (encrypt) -- (rsa);
-\draw[arrow] (rsa) -- (stego);
-\draw[arrow] (rsa) -- (db);
-\draw[arrow] (stego) -- (storage);
-\draw[arrow] (db) -- (receiver);
-\draw[arrow] (storage) -- (receiver);
-\draw[arrow] (receiver) -- (extract);
-\draw[arrow] (db) -- (extract);
-\draw[arrow] (extract) -- (decrypt);
-\draw[arrow] (decrypt) -- (output);
+\draw[arrow] (dashboard) -- (flask);
+\draw[arrow] (flask) -- (bb84);
+\draw[arrow] (bb84) -- (crypto);
+\draw[arrow] (crypto) -- (socket);
+\draw[arrow] (socket.south west) -- +(-1.5,0) |- (udp.west);
 
 \end{tikzpicture}
-\caption{Architecture of Secure File System}
-\label{fig:secure-file-system-architecture}
+\caption{Overall Architecture of the QuantumHop System}
+\label{fig:quantumhop-architecture}
 \end{figure}
 
-The sender side begins with user authentication and file upload. The security processing layer performs encryption, key protection, and steganographic embedding. The database layer stores the metadata required for reverse processing. On the receiver side, the stego image is displayed, the hidden payload is extracted, and the original file is recovered through decryption.
+\section{BB84 Protocol Design}
 
-\section{Detailed Description}
+The BB84 QKD simulation is the cryptographic core of the system. It models the quantum channel between Alice (sender) and Bob (receiver). The protocol proceeds through six stages as illustrated in Figure~\ref{fig:bb84-flow}.
 
-The Secure File System architecture is divided into several functional components. Each component contributes to the complete secure file transfer workflow.
+\begin{figure}[htb]
+\centering
+\begin{tikzpicture}[
+    node distance=1.1cm,
+    every node/.style={font=\small},
+    flowstep/.style={rectangle, draw, rounded corners, align=center, minimum width=4cm, minimum height=0.85cm, fill=blue!8},
+    arrow/.style={->, thick}
+]
+\node[flowstep] (bb84gen)    {1. Generate random bits \& bases (Alice)};
+\node[flowstep, below=of bb84gen]  (bb84meas)   {2. Bob generates random bases};
+\node[flowstep, below=of bb84meas] (bb84eve)    {3. Optional: Eve measures (eavesdrop mode)};
+\node[flowstep, below=of bb84eve]  (bb84sift)   {4. Basis sifting --- keep matching positions};
+\node[flowstep, below=of bb84sift] (bb84err)    {5. Error rate calculation on sample bits};
+\node[flowstep, below=of bb84err]  (bb84derive) {6. SHA-256 key derivation from sifted bits};
 
-\subsection{User Interface Layer}
+\draw[arrow] (bb84gen) -- (bb84meas);
+\draw[arrow] (bb84meas) -- (bb84eve);
+\draw[arrow] (bb84eve) -- (bb84sift);
+\draw[arrow] (bb84sift) -- (bb84err);
+\draw[arrow] (bb84err) -- (bb84derive);
+\end{tikzpicture}
+\caption{BB84 QKD Protocol Flow}
+\label{fig:bb84-flow}
+\end{figure}
 
-The user interface layer is implemented using HTML, CSS, JavaScript, and Flask templates. It provides pages for login, file sending, received-file viewing, process-result display, and decrypted-file preview. The interface hides the complexity of cryptographic and steganographic operations from the user and presents them as simple actions such as login, upload, decrypt, and delete.
+In eavesdrop mode, an intermediate Eve chooses random bases independently. When Eve's basis differs from Alice's, the transmitted bit is randomised before Bob measures it, introducing approximately 25\% errors. If the computed error rate exceeds the configured threshold (15\% by default), the receiver rejects the key and blocks the message.
 
-The login page displays a username field, challenge value, response field, and login button. The send page allows the authenticated user to select a receiver and upload a file. The received-files page displays stego images received by the logged-in user. The result page displays processing logs and status messages after sending or decrypting a file.
+\section{Packet Envelope Design}
 
-\subsection{Authentication Layer}
+Every message is transmitted as a JSON envelope over the raw TCP socket. The envelope schema is as follows:
 
-The authentication layer uses a challenge-response mechanism. When the login page is requested, the backend generates a random challenge and stores it in the session. The user submits a response generated from the challenge and the user's pre-shared secret. The backend computes the expected response using SHA-256 and compares it with the submitted response.
+\begin{itemize}
+    \item \textbf{type}: \texttt{"message"} for direct delivery or \texttt{"relay"} for MITM routing.
+    \item \textbf{packet}: Contains the AES-encrypted payload (\texttt{iv} and \texttt{ciphertext} in Base64), the BB84-derived key in hexadecimal, a single-use \texttt{nonce}, a \texttt{timestamp}, and the \texttt{route} array.
+    \item \textbf{senderName}, \textbf{senderIp}: Identification of the originating machine.
+    \item \textbf{attackMode}: One of \texttt{normal}, \texttt{eavesdrop}, \texttt{mitm}, or \texttt{replay}.
+    \item \textbf{targetIp}, \textbf{targetPort}: Present only in relay envelopes, specifying the real destination.
+\end{itemize}
 
-If the values match, the user is authenticated and the username is stored in the session. If the values do not match, access is denied. This layer ensures that only valid users can access the file sending and receiving functions.
+The response envelope returned by the receiver contains an \texttt{ok} boolean, the decrypted \texttt{plaintext} (on success), \texttt{attackDetected} flag, \texttt{attackType} description, and \texttt{errorRate}.
 
-\subsection{Application Routing Layer}
+\section{Attack Detection Design}
 
-The routing layer is implemented using Flask routes. It controls the movement between pages and connects the front-end forms to backend processing. The important routes are login, send, receive, decrypt, delete, serve-file, and logout.
-
-The send route handles file upload and calls the encryption and embedding pipeline. The receive route fetches files intended for the logged-in user from the database. The decrypt route retrieves the required metadata and calls the extraction and decryption pipeline. The delete route removes the selected stego image and its database entry. The logout route clears the session and returns the user to the login page.
-
-\subsection{Cryptographic Layer}
-
-The cryptographic layer protects the file content and encryption key. AES-GCM is used to encrypt the uploaded file data along with filename metadata. A random 256-bit AES key is generated for each file. AES-GCM produces a ciphertext, nonce, and authentication tag. The tag is used during decryption to verify that the ciphertext has not been modified.
-
-RSA is used to protect the AES key. For each transfer, an RSA key pair is generated. The AES key is encrypted using the RSA public key and later decrypted using the RSA private key during recovery. This hybrid approach is used because AES is efficient for file encryption, while RSA is suitable for protecting small key material.
-
-\subsection{Payload Formation}
-
-Before encryption, the system adds metadata containing the original filename. The metadata and file data are combined and then encrypted. After AES encryption, the encrypted AES key, nonce, authentication tag, and ciphertext are joined into a single payload.
-
-The payload structure can be represented as follows:
-
-\begin{center}
-\texttt{Encrypted AES Key + Nonce + Authentication Tag + Ciphertext}
-\end{center}
-
-This structure is important because the receiver must split the extracted payload into the same parts during decryption. The payload length is stored in the database so that the correct number of bits can be extracted from the stego image.
-
-\subsection{Steganographic Layer}
-
-The steganographic layer hides the encrypted payload inside a cover image. The system uses Least Significant Bit embedding. In this method, each bit of the payload is placed into the least significant bit of selected image pixel values. Since changing the least significant bit causes only a very small change in pixel intensity, the image appears visually unchanged to the user.
-
-The implementation uses pseudo-random pixel positions rather than sequential positions. A seed value is derived from the AES key and stored in the database. During embedding, NumPy generates random pixel indices using this seed. During extraction, the same seed regenerates the same positions, allowing the receiver to recover the payload in the correct order.
-
-\subsection{Database Layer}
-
-The SQLite database stores metadata for each file transfer. The database table includes the sender, receiver, stego image path, payload length, seed, and private key information used in the prototype. This information connects each receiver to the stego images intended for them and provides the required parameters for extraction and decryption.
-
-The database layer is also used during deletion. When the receiver deletes a stego image, the corresponding database record is removed to keep the storage and database synchronized.
-
-\subsection{Storage Layer}
-
-The storage layer contains uploaded sender files, generated receiver stego images, the cover image, and decrypted output files. Sender files are stored temporarily in the sender's sent directory. Stego images are stored in the receiver's received directory. Decrypted files are stored in the decrypted output directory after successful recovery.
-
-This directory-based organization makes it easy to separate sender data, receiver data, input resources, and output files during prototype testing.
-
-\subsection{Receiver-Side Extraction and Recovery}
-
-When the receiver clicks the decrypt option, the system fetches the selected record from the database. The stego image path, payload length, seed, and private key are passed to the extraction and decryption pipeline. The hidden bits are extracted from the same pseudo-random positions used during embedding and converted back into bytes.
-
-The reconstructed payload is split into the encrypted AES key, nonce, authentication tag, and ciphertext. RSA decryption recovers the AES key, and AES-GCM decryption recovers the metadata and original file data. Finally, the filename is read from the metadata and the file is saved in the decrypted storage directory.
-
-\subsection{Data Flow Summary}
-
-The complete data flow of the system is summarized below.
+Three attack detection mechanisms are layered at the receiver:
 
 \begin{enumerate}
-    \item User logs in using challenge-response authentication.
-    \item Sender selects receiver and uploads a file.
-    \item Filename metadata is attached to the uploaded file data.
-    \item File data is encrypted using AES-GCM.
-    \item AES key is encrypted using RSA.
-    \item Encrypted key, nonce, tag, and ciphertext are combined as a payload.
-    \item Payload is embedded into the cover image using pseudo-random LSB positions.
-    \item Stego image is stored in the receiver's storage directory.
-    \item Metadata is stored in SQLite for later extraction and decryption.
-    \item Receiver views the stego image and selects decrypt.
-    \item Payload is extracted from the stego image using seed and payload length.
-    \item AES key is recovered using RSA decryption.
-    \item Original file data and filename are recovered using AES-GCM decryption.
+    \item \textbf{Eavesdrop Detection}: After BB84 simulation with the \texttt{eavesdrop} flag, the receiver computes the error rate. Any rate exceeding \texttt{ERROR\_THRESHOLD} (0.15) causes the message to be blocked.
+    \item \textbf{MITM Detection}: If the envelope's \texttt{attackMode} field is \texttt{"mitm"} (set by the relay node when forwarding), the receiver immediately flags it as a Man-in-the-Middle attack without needing to check the error rate.
+    \item \textbf{Replay Detection}: The receiver maintains a nonce registry with a 60-second TTL. Any envelope whose nonce is already present in the registry is rejected as a replay attack.
 \end{enumerate}
 
-The architecture therefore ensures that the system provides authenticated access, encrypted file protection, hidden payload storage, receiver-specific retrieval, and successful file recovery.
+\section{Dashboard Design}
+
+The React dashboard shown in Figure~\ref{fig:dashboard-real-network} is organized into two tabs. The \textbf{Real Network} tab provides live peer discovery, message composition with target and mode selection, and a real-time inbox. The \textbf{Local Simulation} tab provides an interactive node-graph simulation where the user can observe BB84 basis tables, AES key previews, and step-by-step encryption events for any attack mode without a second physical machine.
+
+\begin{figure}[htb]
+\centering
+\includegraphics[width=0.95\textwidth]{Figures/dashboard_real_network}
+\caption{QuantumHop Dashboard --- Real Network Tab showing discovered peers and inbox}
+\label{fig:dashboard-real-network}
+\end{figure}
+
+\section{Component Interaction and Data Flow}
+
+The complete data flow for a secure message transmission is as follows:
+
+\begin{enumerate}
+    \item User types a message and selects a peer and mode in the React dashboard.
+    \item The dashboard calls \texttt{POST /api/send-to-peer} on the Flask API with the message, target IP, port, attack mode, and optional relay details.
+    \item Flask invokes \texttt{send\_message\_to\_peer()} in \texttt{peer\_socket.py}.
+    \item \texttt{establish\_key()} in \texttt{bb84.py} simulates the quantum channel and returns a \texttt{BB84Result} with the derived key and error rate.
+    \item \texttt{encrypt\_message()} in \texttt{crypto\_utils.py} encrypts the payload with AES-256-CBC using the derived key.
+    \item The encrypted envelope is sent over a raw TCP socket to the target peer's port 5010.
+    \item The target's \texttt{\_handle\_client()} thread receives and parses the envelope.
+    \item Attack detection checks are performed (error rate, MITM flag, nonce registry).
+    \item If all checks pass, \texttt{decrypt\_message()} recovers the plaintext and the message is stored in the inbox.
+    \item The response JSON is returned to the sender and displayed in the dashboard.
+\end{enumerate}

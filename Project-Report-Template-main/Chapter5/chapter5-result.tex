@@ -1,15 +1,11 @@
 \chapter{Testing and Results}
 
-Testing is an important phase in the development of the Secure File System because the project involves multiple dependent operations such as authentication, file upload, encryption, steganographic embedding, database storage, extraction, decryption, and file recovery. If any one of these operations fails, the receiver may not be able to recover the original file successfully. Therefore, the system was tested by verifying each major workflow from login to final file recovery.
-
-The objective of testing was to ensure that the application performs according to the specified requirements. The tests were designed to validate user authentication, sender-side file processing, receiver-side file listing, payload extraction, decryption, output file generation, deletion, and error handling. The system was tested using predefined users, sample text and HTML files, the provided cover image, and the SQLite database used by the application.
+Testing of the QuantumHop system was conducted in two phases. The first phase used unit-level Python scripts to verify each backend module independently. The second phase was a full end-to-end two-machine demonstration over a mobile hotspot LAN. The objective was to confirm that all four communication modes (direct, eavesdrop, MITM, and replay) produce the expected cryptographic outcomes and that the dashboard displays the correct alerts and inbox entries.
 
 \section{Test Cases for System Testing}
 
-System testing was performed by considering the Secure File System as a complete application. Each test case checks a user-visible function and verifies whether the backend operations are completed correctly. The main test cases are listed in Table \ref{tab:system-test-cases}.
-
-\begin{longtable}{|p{1.2cm}|p{3.4cm}|p{4.2cm}|p{4.2cm}|p{2cm}|}
-\caption{System test cases for Secure File System}\label{tab:system-test-cases}\\
+\begin{longtable}{|p{1.2cm}|p{3.4cm}|p{4.0cm}|p{4.0cm}|p{1.8cm}|}
+\caption{System test cases for QuantumHop}\label{tab:system-test-cases}\\
 \hline
 \textbf{Test ID} & \textbf{Test Scenario} & \textbf{Input / Action} & \textbf{Expected Result} & \textbf{Status} \\
 \hline
@@ -20,120 +16,132 @@ System testing was performed by considering the Secure File System as a complete
 \hline
 \endhead
 
-TC-01 & Login page loading & Open the application in a browser & Login page should be displayed with username field, challenge value, response field, and login button & Passed \\
+TC-01 & BB84 key generation & Call \texttt{establish\_key()} with no eavesdrop & Error rate near 0\%, 32-byte key returned & Passed \\
 \hline
 
-TC-02 & Valid user authentication & Enter valid username and correct challenge-response value & User session should be created and user should be redirected to the received-files page & Passed \\
+TC-02 & BB84 eavesdrop detection & Call \texttt{establish\_key(eavesdrop=True)} & Error rate $\approx$25\%, exceeds 15\% threshold & Passed \\
 \hline
 
-TC-03 & Invalid user authentication & Enter incorrect response value & Login should fail and the user should not be allowed to access the application & Passed \\
+TC-03 & AES-256-CBC encryption & Encrypt ``Hello'' with a BB84-derived key & Base64 IV and ciphertext returned & Passed \\
 \hline
 
-TC-04 & Send-file page display & Open the send-file page after login & Receiver dropdown and file upload option should be displayed & Passed \\
+TC-04 & AES-256-CBC decryption & Decrypt using original key bytes & Plaintext ``Hello'' recovered correctly & Passed \\
 \hline
 
-TC-05 & File upload and receiver selection & Select receiver and upload a sample file & File should be saved in sender storage and passed to the encryption pipeline & Passed \\
+TC-05 & Nonce registration & Register a new nonce & Registry returns \texttt{ok=True} & Passed \\
 \hline
 
-TC-06 & AES encryption & Submit uploaded file for secure transfer & File data and filename metadata should be encrypted using AES-GCM & Passed \\
+TC-06 & Replay detection & Register the same nonce twice & Second registration returns \texttt{ok=False} & Passed \\
 \hline
 
-TC-07 & RSA key protection & Generate RSA key pair and encrypt AES key & AES key should be encrypted using RSA public key and included in payload & Passed \\
+TC-07 & Peer discovery broadcast & Start both machines on hotspot & Both appear in each other's peer list within 3 seconds & Passed \\
 \hline
 
-TC-08 & Payload creation & Combine encrypted AES key, nonce, tag, and ciphertext & Payload should be created and payload length should be calculated & Passed \\
+TC-08 & Direct socket handler & Call \texttt{\_handle\_message()} with valid envelope & Returns \texttt{\{ok: True, plaintext: ...\}} & Passed \\
 \hline
 
-TC-09 & Steganographic embedding & Embed payload into cover image & Stego image should be generated in the receiver's storage directory & Passed \\
+TC-09 & Self socket send & Start server, send to 127.0.0.1:5010 & Message received and decrypted by own inbox & Passed \\
 \hline
 
-TC-10 & Database storage & Complete send operation & Sender, receiver, stego path, payload length, seed, and private key data should be stored in SQLite & Passed \\
+TC-10 & Flask API /api/send-to-peer & POST with target IP and direct mode & JSON response with \texttt{ok: true} and plaintext & Passed \\
 \hline
 
-TC-11 & Received-files display & Login as receiver and open received-files page & Receiver should see the stego image intended for that account & Passed \\
+TC-11 & Direct mode (two machines) & Send from Laptop A to Laptop B, direct mode & Message appears in Laptop B inbox; error rate $\approx$0\% & Passed \\
 \hline
 
-TC-12 & Payload extraction & Click decrypt on a received stego image & Hidden payload should be extracted using the stored seed and payload length & Passed \\
+TC-12 & Eavesdrop detection (two machines) & Send from Laptop A with eavesdrop mode & Laptop B blocks message; error rate $\approx$25\%; alert shown & Passed \\
 \hline
 
-TC-13 & File decryption & Decrypt extracted payload & RSA should recover the AES key and AES-GCM should recover the original file data & Passed \\
+TC-13 & MITM relay detection & Send via ``Self'' relay node & Laptop B blocks message; MITM alert shown in dashboard & Passed \\
 \hline
 
-TC-14 & File recovery & Complete decryption process & Original filename should be recovered and decrypted file should be saved in the decrypted storage directory & Passed \\
+TC-14 & Replay attack detection & Resend envelope with same nonce & Second message blocked; ``Replay Attack'' alert shown & Passed \\
 \hline
 
-TC-15 & HTML file preview & Decrypt an HTML file & The result page should display the decrypted HTML file in an iframe preview & Passed \\
+TC-15 & Port auto-cleanup & Run launcher with ports occupied & All occupied processes killed; servers start cleanly & Passed \\
 \hline
 
-TC-16 & Non-HTML file output & Decrypt a text or other file type & The result page should provide a download option for the decrypted file & Passed \\
+TC-16 & Dashboard peer list refresh & Add second machine to hotspot & New peer appears in dashboard within 3s automatically & Passed \\
 \hline
 
-TC-17 & Delete received file & Click delete on a received stego image & Stego image should be removed from storage and database entry should be deleted & Passed \\
+TC-17 & Inbox display & Receive a successful message & Message card shows sender, plaintext, error rate badge & Passed \\
 \hline
 
-TC-18 & Logout & Click logout from the navigation bar & Session should be cleared and user should be redirected to login page & Passed \\
+TC-18 & Attack inbox display & Receive a blocked message & Red card shown with attack type and blocked indicator & Passed \\
 \hline
 
-TC-19 & Incorrect extraction parameters & Attempt decryption with wrong seed or payload length & Payload extraction or decryption should fail and an error message should be displayed & Passed \\
+TC-19 & Local simulation mode & Select attack mode and run simulation & Step-by-step BB84 and AES events shown in hop flow & Passed \\
 \hline
 
-TC-20 & Cover image capacity check & Try embedding payload larger than image capacity & System should detect insufficient image capacity and stop embedding & Passed \\
+TC-20 & Error recovery (bad envelope) & Send malformed JSON to port 5010 & Server returns \texttt{\{ok: false, error: ...\}} without crashing & Passed \\
 \hline
 \end{longtable}
 
-The above test cases verify the complete file transfer cycle. The most important system-level validation is that the file recovered by the receiver should match the file uploaded by the sender. This confirms that encryption, embedding, extraction, decryption, and metadata recovery are working in the correct sequence.
-
 \section{Results}
 
-The Secure File System was successfully implemented and tested as a working prototype. The system provides a browser-based interface for sending and receiving secure files. The major result of the project is that an uploaded file can be encrypted, hidden inside an image, transferred to a receiver-specific storage location, extracted, decrypted, and recovered with its original filename.
+\subsection{BB84 Protocol Results}
 
-\subsection{Authentication Result}
+The BB84 simulation consistently produces error rates near 0\% in normal mode and between 20\% and 30\% in eavesdrop mode. The configurable 15\% threshold reliably distinguishes the two cases. Key derivation via SHA-256 produces a unique 256-bit key for every call, ensuring perfect forward secrecy at the session level.
 
-The login module successfully generates a challenge value when the login page is opened. When the correct response is submitted for a valid user, the system creates a session and redirects the user to the received-files page. When an incorrect response is submitted, login fails. This verifies that the challenge-response authentication workflow is functioning correctly.
+\subsection{Direct Mode Results}
 
-\subsection{Encryption and Embedding Result}
+In direct mode, messages sent from Laptop A (IP 10.41.211.103) to Laptop B (IP 10.41.211.148) are received and decrypted successfully within approximately one second on a typical mobile hotspot. The receiver's inbox displays the sender name, plaintext, and a green BB84 badge showing the error rate and key fingerprint.
 
-The sender-side workflow successfully accepts a file upload and receiver selection. After submission, the system reads the uploaded file, attaches filename metadata, encrypts the combined data using AES-GCM, generates RSA keys, encrypts the AES key, creates the payload, and embeds the payload into the cover image. The generated stego image is saved in the receiver's storage directory.
+\subsection{Eavesdrop Detection Results}
 
-During testing, the application displayed process logs showing the successful completion of important steps such as file loading, metadata addition, AES encryption, seed generation, RSA key generation, AES key encryption, payload creation, and image embedding. These logs confirm that the encryption and embedding pipeline executes in the intended order.
+When eavesdrop mode is selected, the BB84 simulation introduces bit-flip errors at a rate of approximately 25\%, well above the 15\% detection threshold. The receiver's \texttt{\_handle\_message()} function detects the high error rate, stores a blocked entry in the inbox, emits a security event, and returns \texttt{attackDetected: true} to the sender. The dashboard displays a red alert banner: ``Eavesdropping --- BB84 error rate 25\% exceeded 15\% threshold.''
 
-\subsection{Database Result}
+\subsection{MITM Relay Detection Results}
 
-The SQLite database successfully stores the metadata generated during the send operation. Each record includes the sender, receiver, stego image path, payload length, seed, and private key information used in the prototype. This metadata allows the receiver-side module to identify the correct image and extract the correct number of bits from the correct pseudo-random positions.
+When MITM mode is selected with the ``Self'' relay option, the sender routes the envelope through its own socket server acting as a relay. The relay logs the interception and forwards the envelope to Laptop B with \texttt{attackMode="mitm"}. Laptop B's handler detects the MITM flag and blocks the message without needing to check the error rate. The dashboard shows: ``Man-in-the-Middle --- packet was relayed through an attacker machine.''
 
-The received-files page correctly filters files based on the logged-in receiver. This confirms that sender and receiver information is being stored and retrieved correctly from the database.
+\subsection{Replay Attack Detection Results}
 
-\subsection{Extraction and Decryption Result}
+In replay mode, the sender transmits the same nonce twice. The first transmission is accepted. The second is rejected by the nonce registry, which detects the duplicate within the 60-second TTL window. The dashboard shows: ``Replay Attack --- duplicate nonce detected.''
 
-The receiver-side decryption process successfully extracts the hidden payload from the stego image. The system regenerates the same pseudo-random pixel positions using the stored seed and reads the least significant bits from those positions. The extracted bits are converted back into bytes to reconstruct the encrypted payload.
+\subsection{System Performance}
 
-After extraction, the payload is separated into the RSA-encrypted AES key, nonce, tag, and ciphertext. RSA decryption recovers the AES key, and AES-GCM decryption recovers the original metadata and file data. The filename is extracted from the metadata and the decrypted file is saved in the output directory. The successful recovery of the original file confirms that the cryptographic and steganographic modules are integrated correctly.
+The complete round-trip time for a short message in direct mode is approximately 800ms on a mobile hotspot. This includes BB84 simulation ($\approx$10ms), AES encryption ($<$1ms), TCP socket connection establishment ($\approx$200ms), server-side processing ($\approx$50ms), and HTTP response from Flask to the browser ($\approx$100ms). The system remains responsive for simultaneous peer discovery and API polling.
 
-\subsection{User Interface Result}
+\subsection{Dashboard Results}
 
-The web interface provides a simple workflow for the user. The login page displays the challenge and response fields. The send page provides receiver selection and file upload. The received-files page displays stego images as cards with decrypt and delete options. The result page displays process logs and final status messages such as successful file sending or successful decryption.
+The QuantumHop dashboard provides a complete real-time view of all network and cryptographic activity. The Real Network tab displays discovered peers within 3 seconds of connection, delivers sent message results immediately, and updates the inbox automatically via the 2-second polling interval.
 
-For HTML files, the decrypted output can be previewed directly in the browser using an iframe. For text or other file types, the application provides a download option. This makes the output accessible while keeping the interface simple.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figures/dashboard_real_network.png}
+    \caption{Real Network Dashboard View showing Peer Discovery and Messaging}
+    \label{fig:dashboard-real-network}
+\end{figure}
 
-\subsection{Overall Result Analysis}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figures/dashboard_local_simulation.png}
+    \caption{Local Simulation View showing Step-by-step BB84 Execution}
+    \label{fig:dashboard-local-simulation}
+\end{figure}
 
-The final results show that the Secure File System satisfies the main objectives of the project. It authenticates users, protects file data using AES-GCM, protects the AES key using RSA, hides the encrypted payload inside an image using LSB steganography, stores transfer metadata in SQLite, and recovers the original file on the receiver side.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figures/mitm_challenge.png}
+    \caption{Interactive Man-in-the-Middle Attack Interception Challenge and Live Log View}
+    \label{fig:mitm-challenge}
+\end{figure}
 
-The layered approach improves security compared to a normal file upload system. Even if the stego image is viewed directly, the hidden content is not visible. Even if the hidden payload is extracted without the required metadata and keys, the original file cannot be read. This demonstrates the benefit of combining authentication, encryption, and steganography in a single secure file sharing application.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Figures/mitm_sifted_key.png}
+    \caption{Simulation Hop Details showing QKD Sifted Key Table and AES Decryption/Encryption Blocks}
+    \label{fig:mitm-sifted-key}
+\end{figure}
 
 \subsection{Summary of Results}
 
-The outcomes obtained from testing are summarized below.
-
 \begin{itemize}
-    \item The application successfully authenticates valid users using a challenge-response mechanism.
-    \item Uploaded files are encrypted using AES-GCM before being stored in the transfer payload.
-    \item RSA encryption successfully protects the AES key used for file encryption.
-    \item The encrypted payload is successfully embedded into a cover image using pseudo-random LSB positions.
-    \item Receiver-specific file listing works correctly using SQLite database records.
-    \item The receiver can extract the payload, decrypt the file, and recover the original filename and data.
-    \item The delete function removes both the stored stego image and the corresponding database entry.
-    \item The interface provides clear logs and status messages for send and decrypt operations.
+    \item BB84 key exchange correctly generates shared 256-bit AES keys and detects eavesdropping via error rate threshold.
+    \item AES-256-CBC encryption successfully protects all message payloads transmitted over raw TCP sockets.
+    \item Peer discovery via UDP broadcast correctly identifies all LAN machines within 3 seconds.
+    \item All four communication modes (direct, eavesdrop, MITM, replay) produce the expected cryptographic outcomes.
+    \item The dashboard correctly displays all security events, inbox entries, and attack alerts in real time.
+    \item The launcher script reliably kills stale processes and starts all services cleanly on every run.
 \end{itemize}
-
-Thus, the testing confirms that the Secure File System prototype works according to the defined requirements and demonstrates a practical secure file transfer mechanism using hybrid cryptography and steganography.

@@ -706,6 +706,50 @@ h3 {
 
 .logItem.success span { color: #047857; }
 
+.logItem small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.logDetails {
+  border-top: 1px solid rgb(148 163 184 / 0.28);
+  margin-top: 4px;
+  padding-top: 6px;
+}
+
+.logDetails summary {
+  color: #334155;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.logDetails ol {
+  display: grid;
+  gap: 5px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.logDetails li {
+  background: rgb(255 255 255 / 0.7);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.logDetails strong {
+  color: #0f172a;
+  display: block;
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.logDetails p {
+  font-size: 11px;
+}
+
 /* ========================================= */
 /*  Packet Journey (Timeline)                 */
 /* ========================================= */
@@ -1716,4 +1760,169 @@ h3 {
   background: #fef2f2;
   color: #991b1b;
   border: 1px solid #fecaca;
+}
+
+.nodeSteps {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 8px;
+}
+
+.nodeSteps summary {
+  align-items: center;
+  color: #334155;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 800;
+  gap: 6px;
+  list-style: none;
+  min-height: 28px;
+}
+
+.nodeSteps summary::-webkit-details-marker {
+  display: none;
+}
+
+.nodeSteps summary:hover {
+  color: #0f766e;
+}
+
+.nodeStepList {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.nodeStep {
+  align-items: flex-start;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 22px minmax(0, 1fr);
+}
+
+.nodeStepIcon {
+  align-items: center;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
+  color: #047857;
+  display: flex;
+  height: 22px;
+  justify-content: center;
+  margin-top: 2px;
+  width: 22px;
+}
+
+.nodeStep.warning .nodeStepIcon {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
+}
+
+.nodeStep.attack .nodeStepIcon {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.nodeStepBody {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+}
+
+.nodeStepTop {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.nodeStepTop strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+
+.nodeStepTop span {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.nodeStepTop code {
+  background: #f1f5f9;
+  border-radius: 3px;
+  color: #64748b;
+  font-size: 10px;
+  padding: 1px 5px;
+}
+
+.nodeStepBody p {
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.nodeStepBody small {
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.sendExplanation {
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+}
+
+.sendExplanation.delivered {
+  background: #f0fdfa;
+  border-color: #99f6e4;
+  color: #115e59;
+}
+
+.sendExplanation.blocked {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+.sendExplanation strong {
+  font-size: 13px;
+}
+
+.sendExplanation p {
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.sendExplanation ol {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sendExplanation li {
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 6px;
+  display: grid;
+  gap: 2px;
+  padding: 7px 8px;
+}
+
+.sendExplanation span {
+  font-size: 11px;
+  font-weight: 800;
 }

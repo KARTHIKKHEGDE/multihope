@@ -14,6 +14,25 @@ _lock = threading.Lock()
 _running = False
 
 
+def remember_peer(
+    name: str,
+    ip: str,
+    port: int = config.API_PORT,
+    socket_port: int = config.PEER_SOCKET_PORT,
+) -> None:
+    """Add or refresh a peer learned from discovery or an incoming socket message."""
+    if not ip or ip == config.LOCAL_IP:
+        return
+    with _lock:
+        _peers[ip] = {
+            "name": name or ip,
+            "ip": ip,
+            "port": port,
+            "socketPort": socket_port,
+            "last_seen": time.time(),
+        }
+
+
 def get_peers() -> list[dict]:
     """Get list of currently online peers (excluding self)."""
     now = time.time()
@@ -38,6 +57,13 @@ def _broadcast_loop():
     """Periodically broadcast our presence on the LAN."""
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    broadcast_targets = [
+        ("255.255.255.255", config.DISCOVERY_PORT),
+        ("<broadcast>", config.DISCOVERY_PORT),
+    ]
+    if config.LOCAL_IP.count(".") == 3 and not config.LOCAL_IP.startswith("127."):
+        parts = config.LOCAL_IP.split(".")
+        broadcast_targets.append((".".join(parts[:3] + ["255"]), config.DISCOVERY_PORT))
     while _running:
         try:
             message = json.dumps({
@@ -46,7 +72,11 @@ def _broadcast_loop():
                 "port": config.API_PORT,
                 "socketPort": config.PEER_SOCKET_PORT,
             }).encode("utf-8")
-            sock.sendto(message, ("<broadcast>", config.DISCOVERY_PORT))
+            for target in broadcast_targets:
+                try:
+                    sock.sendto(message, target)
+                except Exception:
+                    pass
         except Exception:
             pass
         time.sleep(config.DISCOVERY_INTERVAL)
@@ -66,10 +96,12 @@ def _listen_loop():
         try:
             data, addr = sock.recvfrom(1024)
             peer = json.loads(data.decode("utf-8"))
-            peer["last_seen"] = time.time()
-            if peer["ip"] != config.LOCAL_IP:
-                with _lock:
-                    _peers[peer["ip"]] = peer
+            remember_peer(
+                peer.get("name", addr[0]),
+                peer.get("ip", addr[0]),
+                int(peer.get("port", config.API_PORT)),
+                int(peer.get("socketPort", config.PEER_SOCKET_PORT)),
+            )
         except socket.timeout:
             continue
         except Exception:

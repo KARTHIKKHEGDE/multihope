@@ -1,65 +1,49 @@
 \chapter{Conclusion}
 
-The Secure File System project was developed to provide a secure and practical method for transferring files between authenticated users. The system combines challenge-response authentication, AES-GCM encryption, RSA key protection, SQLite-based metadata storage, and Least Significant Bit steganography. By integrating these techniques, the project demonstrates a layered security model in which the file content is encrypted and the encrypted payload is hidden inside an image.
+The QuantumHop Secure Multi-Hop Communication System successfully demonstrates the integration of quantum-inspired key distribution with practical raw TCP socket programming. By simulating the BB84 Quantum Key Distribution protocol in software, the system derives fresh AES-256 encryption keys for every message without relying on classical Diffie-Hellman or RSA key agreement. The system operates on real physical laptops over a standard LAN and correctly detects three categories of network attacks: passive eavesdropping, Man-in-the-Middle relay, and replay attacks.
 
-The implemented application successfully supports the complete workflow of secure file sharing. A user can log in, select a receiver, upload a file, encrypt the file, embed the encrypted payload into a cover image, and send it to the receiver. The receiver can view the received stego image, extract the hidden payload, decrypt the file, and recover the original filename and data. The testing results confirm that the core objectives of the project have been achieved.
+The project proves that the core physical principle of BB84 --- that any eavesdropping attempt on the quantum channel introduces statistically detectable errors --- can be translated into a practical software security mechanism. The configurable error rate threshold provides a tunable security margin, and the nonce-based replay protection adds a complementary layer against packet capture and retransmission attacks.
 
-The project also highlights the benefit of combining cryptography and steganography. Cryptography protects the meaning of the data, while steganography hides the presence of the data. This makes the system more secure than a basic file upload application or a system that only stores encrypted files. The use of a modular implementation also makes the application easier to understand, test, and improve in future versions.
+The interactive React dashboard provides a rich, real-time educational experience. Students and practitioners can observe every step of the BB84 protocol, watch AES keys being derived, see messages arriving in the inbox, and trigger attack scenarios at the click of a button. This makes the system uniquely suitable for laboratory demonstrations, project exhibitions, and self-paced learning of quantum cryptography concepts.
 
 \section{Limitations}
 
-Although the Secure File System works successfully as a prototype, it has certain limitations that must be considered before using it in a real-world environment.
-
 \begin{enumerate}
-    \item \textbf{Predefined Users:} The current implementation uses predefined users and pre-shared secrets. It does not include dynamic user registration, password reset, or account management features.
+    \item \textbf{Simulated Quantum Channel:} The BB84 protocol is simulated in classical software. A real QKD system uses single photons transmitted over a dedicated optical channel, providing information-theoretic security that no classical computation can break. The software simulation provides conceptual fidelity but not physical security.
 
-    \item \textbf{Prototype Key Storage:} The private key information required for decryption is stored in the database as part of the prototype workflow. In a production system, private keys should never be stored in this manner and must be protected using secure key management practices.
+    \item \textbf{Key Transmission in Packet:} In the current implementation, the sender includes the derived BB84 key in the JSON envelope so that the receiver can decrypt the message using the same key. In a true QKD system, Alice and Bob derive identical keys independently through quantum measurement; no key is ever transmitted. This design decision was necessary because two independent software BB84 runs would produce different keys.
 
-    \item \textbf{Limited Cover Image Selection:} The system uses a predefined cover image for embedding the encrypted payload. Users cannot currently select different cover images based on file size or preference.
+    \item \textbf{In-Memory Storage:} The inbox, event log, and nonce registry are stored in memory and are lost on restart. A persistent backend would require a database such as SQLite or Redis.
 
-    \item \textbf{Payload Size Constraint:} The amount of data that can be hidden depends on the capacity of the cover image. Large files may not fit inside the selected image, and the user must use a larger cover image for such cases.
+    \item \textbf{Single-Threaded BB84 Simulation:} The BB84 simulation runs synchronously on the Flask request thread. For very long messages or high-volume systems, this could become a bottleneck.
 
-    \item \textbf{Local Storage Dependency:} Uploaded files, stego images, and decrypted files are stored in local project directories. This is suitable for demonstration, but not ideal for distributed or cloud-based deployment.
+    \item \textbf{No TLS on Flask API:} The Flask API (port 5000) is served over plain HTTP. While inter-machine message traffic uses AES-encrypted socket payloads, the browser-to-Flask communication is not encrypted. In a production deployment, HTTPS would be required.
 
-    \item \textbf{Basic Access Control:} The application filters files based on the receiver value stored in the database, but it does not yet implement advanced role-based access control, permission levels, or administrator monitoring.
-
-    \item \textbf{No Advanced Audit Logs:} The system displays process logs during encryption and decryption, but it does not maintain a permanent audit log of user activity, login attempts, file transfers, or failed decryption attempts.
-
-    \item \textbf{Limited File Validation:} The prototype focuses on secure transfer and does not include strict validation for file type, file size, malicious content, or duplicate filenames.
-
-    \item \textbf{Development Server Usage:} The Flask application is currently suitable for local testing. For production usage, it would require deployment with a proper web server, secure configuration, and HTTPS.
+    \item \textbf{Predefined Port Configuration:} All ports (5000, 5010, 5173, 5555) are hardcoded. Deployment in environments with strict firewall policies would require configuration changes.
 \end{enumerate}
-
-These limitations do not reduce the value of the project as an academic prototype. Instead, they identify the areas where the system can be strengthened and extended in future work.
 
 \section{Future Enhancements}
 
-The Secure File System can be improved further by adding features that increase security, scalability, usability, and deployment readiness. The possible future enhancements are listed below.
-
 \begin{enumerate}
-    \item \textbf{Dynamic User Registration:} A registration module can be added so that new users can create accounts securely. This can include password hashing, email verification, and account recovery options.
+    \item \textbf{Independent Key Derivation:} Implement a protocol where Alice and Bob independently simulate BB84 with a shared random seed, deriving the same key without transmitting it. This would more faithfully model actual QKD without specialised hardware.
 
-    \item \textbf{Improved Key Management:} The system can be enhanced by storing private keys securely outside the database or by allowing each receiver to maintain their own private key. Public keys can be used for encryption, while private keys remain under receiver control.
+    \item \textbf{Integration with Real QKD Hardware:} Connect the system to commercially available QKD hardware (such as ID Quantique or Toshiba QKD systems) to replace the simulation with actual photon-based key distribution.
 
-    \item \textbf{Multi-Factor Authentication:} The current challenge-response login can be extended with multi-factor authentication, such as one-time passwords or email-based verification, to improve login security.
+    \item \textbf{Persistent Storage:} Replace in-memory inbox and event store with SQLite or Redis to persist messages and logs across restarts.
 
-    \item \textbf{User-Selectable Cover Images:} Future versions can allow users to upload or select cover images. The system can automatically check whether the selected image has enough capacity for the encrypted payload.
+    \item \textbf{End-to-End TLS:} Wrap the Flask API with HTTPS using a self-signed certificate for secure browser-to-backend communication.
 
-    \item \textbf{File Size and Type Validation:} File validation can be added to restrict unsupported or unsafe files. The application can also show warnings when the selected file is too large for the available cover image.
+    \item \textbf{Group Messaging:} Extend the socket layer to support broadcast or multicast delivery to multiple peers simultaneously using separate per-recipient BB84 key exchanges.
 
-    \item \textbf{Cloud or Server Deployment:} The project can be deployed on a secure server with HTTPS support so that users can access it from different systems over a network.
+    \item \textbf{Multi-Hop Routing:} Implement an onion-routing style multi-hop path where a message passes through several intermediate nodes, each encrypting with its own BB84-derived key, to demonstrate quantum-secured multi-hop communication.
 
-    \item \textbf{Audit Logging:} A permanent audit log can be maintained for login attempts, file uploads, decryption attempts, delete operations, and errors. This would improve traceability and administrative monitoring.
+    \item \textbf{Mobile Application:} Port the dashboard to a React Native or Flutter mobile application so that smartphones can participate in the QuantumHop network.
 
-    \item \textbf{Role-Based Access Control:} Administrator and normal-user roles can be added. Administrators may manage users, monitor file transfer records, and configure system settings.
+    \item \textbf{Advanced Attack Simulation:} Add more sophisticated attack scenarios such as photon number splitting, intercept-and-resend with partial basis knowledge, and denial-of-service on the discovery port.
 
-    \item \textbf{Enhanced Steganography Techniques:} The current LSB method can be improved by using adaptive steganography, frequency-domain techniques, or image quality analysis to reduce detectability.
+    \item \textbf{Audit Logging:} Maintain a persistent, tamper-evident log of all security events using an append-only data structure, enabling post-incident forensic analysis.
 
-    \item \textbf{Performance Optimization:} Large-file handling can be improved through chunk-based encryption, optimized image processing, progress indicators, and background task processing.
-
-    \item \textbf{Integrity and Tamper Detection:} Additional hash verification can be added so that the receiver can confirm that the recovered file exactly matches the original uploaded file.
-
-    \item \textbf{Improved User Interface:} The interface can be enhanced with dashboards, transfer history, file search, preview options, alerts, and better error messages.
+    \item \textbf{Certificate-Based Peer Authentication:} Add a lightweight PKI so that peers present certificates during discovery, preventing a rogue device from impersonating a legitimate node.
 \end{enumerate}
 
-In conclusion, the Secure File System successfully demonstrates a secure file transfer mechanism using hybrid cryptography and steganography. The current version proves the feasibility of the concept, while the proposed enhancements can transform it into a more secure, scalable, and production-ready application.
+In conclusion, the QuantumHop project successfully bridges the gap between quantum cryptography theory and practical network security implementation. It demonstrates that quantum-inspired key exchange can be integrated into standard socket programming environments to provide meaningful protection against eavesdropping, relay, and replay attacks. The system serves as both a functional prototype and a compelling educational platform for the next generation of information security practitioners.

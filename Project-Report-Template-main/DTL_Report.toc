@@ -1,0 +1,59 @@
+\contentsline {chapter}{Abstract}{i}{chapter*.1}%
+\contentsline {chapter}{List of Figures}{v}{chapter*.2}%
+\contentsline {chapter}{List of Tables}{vi}{chapter*.3}%
+\contentsline {chapter}{\numberline {1}Introduction}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}Introduction}{2}{section.1.1}%
+\contentsline {section}{\numberline {1.2}Problem Statement}{2}{section.1.2}%
+\contentsline {section}{\numberline {1.3}Motivation}{3}{section.1.3}%
+\contentsline {section}{\numberline {1.4}Objectives}{3}{section.1.4}%
+\contentsline {section}{\numberline {1.5}Scope and Relevance}{4}{section.1.5}%
+\contentsline {chapter}{\numberline {2}Requirement Specification}{5}{chapter.2}%
+\contentsline {section}{\numberline {2.1}Specific Requirements}{6}{section.2.1}%
+\contentsline {subsection}{\numberline {2.1.1}Functional Requirements}{6}{subsection.2.1.1}%
+\contentsline {subsection}{\numberline {2.1.2}Non-Functional Requirements}{8}{subsection.2.1.2}%
+\contentsline {section}{\numberline {2.2}Technical Requirements}{9}{section.2.2}%
+\contentsline {subsection}{\numberline {2.2.1}Hardware Requirements}{9}{subsection.2.2.1}%
+\contentsline {subsection}{\numberline {2.2.2}Software Requirements}{9}{subsection.2.2.2}%
+\contentsline {chapter}{\numberline {3}System Design and Architecture}{10}{chapter.3}%
+\contentsline {section}{\numberline {3.1}Overall System Architecture}{11}{section.3.1}%
+\contentsline {section}{\numberline {3.2}BB84 Protocol Design}{12}{section.3.2}%
+\contentsline {section}{\numberline {3.3}Packet Envelope Design}{12}{section.3.3}%
+\contentsline {section}{\numberline {3.4}Attack Detection Design}{13}{section.3.4}%
+\contentsline {section}{\numberline {3.5}Dashboard Design}{13}{section.3.5}%
+\contentsline {section}{\numberline {3.6}Component Interaction and Data Flow}{13}{section.3.6}%
+\contentsline {chapter}{\numberline {4}Implementation}{15}{chapter.4}%
+\contentsline {section}{\numberline {4.1}Implementation Environment}{16}{section.4.1}%
+\contentsline {section}{\numberline {4.2}Module Descriptions}{16}{section.4.2}%
+\contentsline {subsection}{\numberline {4.2.1}bb84.py --- Quantum Key Distribution Engine}{16}{subsection.4.2.1}%
+\contentsline {subsection}{\numberline {4.2.2}crypto\_utils.py --- AES-256-CBC Encryption}{17}{subsection.4.2.2}%
+\contentsline {subsection}{\numberline {4.2.3}peer\_socket.py --- Raw TCP Socket Layer}{17}{subsection.4.2.3}%
+\contentsline {subsection}{\numberline {4.2.4}peer\_discovery.py --- UDP Broadcast Discovery}{18}{subsection.4.2.4}%
+\contentsline {subsection}{\numberline {4.2.5}attack\_detector.py --- Nonce Registry and Error Rate Check}{18}{subsection.4.2.5}%
+\contentsline {subsection}{\numberline {4.2.6}app.py --- Flask API Gateway}{18}{subsection.4.2.6}%
+\contentsline {subsection}{\numberline {4.2.7}React Frontend}{18}{subsection.4.2.7}%
+\contentsline {section}{\numberline {4.3}Launcher Script}{19}{section.4.3}%
+\contentsline {section}{\numberline {4.4}Challenges and Solutions}{19}{section.4.4}%
+\contentsline {chapter}{\numberline {5}Testing and Results}{21}{chapter.5}%
+\contentsline {section}{\numberline {5.1}Test Cases for System Testing}{22}{section.5.1}%
+\contentsline {section}{\numberline {5.2}Results}{24}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}BB84 Protocol Results}{24}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}Direct Mode Results}{24}{subsection.5.2.2}%
+\contentsline {subsection}{\numberline {5.2.3}Eavesdrop Detection Results}{24}{subsection.5.2.3}%
+\contentsline {subsection}{\numberline {5.2.4}MITM Relay Detection Results}{25}{subsection.5.2.4}%
+\contentsline {subsection}{\numberline {5.2.5}Replay Attack Detection Results}{25}{subsection.5.2.5}%
+\contentsline {subsection}{\numberline {5.2.6}System Performance}{25}{subsection.5.2.6}%
+\contentsline {subsection}{\numberline {5.2.7}Dashboard Results}{25}{subsection.5.2.7}%
+\contentsline {subsection}{\numberline {5.2.8}Summary of Results}{27}{subsection.5.2.8}%
+\contentsline {chapter}{\numberline {6}Conclusion}{29}{chapter.6}%
+\contentsline {section}{\numberline {6.1}Limitations}{30}{section.6.1}%
+\contentsline {section}{\numberline {6.2}Future Enhancements}{31}{section.6.2}%
+\contentsline {chapter}{\numberline {A}Code Snippets}{33}{appendix.A}%
+\contentsline {section}{\numberline {A.1}BB84 Key Exchange --- Core Function}{34}{section.A.1}%
+\contentsline {section}{\numberline {A.2}Raw TCP Socket --- Send Envelope}{35}{section.A.2}%
+\contentsline {section}{\numberline {A.3}Attack Detection --- Handle Message}{35}{section.A.3}%
+\contentsline {chapter}{\numberline {B}Screenshots}{37}{appendix.B}%
+\contentsline {section}{\numberline {B.1}Real Network Dashboard}{38}{section.B.1}%
+\contentsline {section}{\numberline {B.2}Local Simulation Dashboard}{38}{section.B.2}%
+\contentsline {section}{\numberline {B.3}Man-in-the-Middle Attack Interception}{39}{section.B.3}%
+\contentsline {section}{\numberline {B.4}Cryptographic and Rekey Hop Details}{39}{section.B.4}%
+\contentsline {chapter}{Bibliography}{40}{figure.B.4}%

@@ -14,7 +14,7 @@ const modes = [
     id: "mitm",
     label: "MITM",
     Icon: UserRoundX,
-    description: "Man-in-the-Middle — attacker intercepts and re-encrypts, flagged by BB84 mismatch.",
+    description: "Man-in-the-Middle — attacker relay forwards the packet; receiver blocks it from relay metadata before decrypting.",
     color: "red",
   },
   {

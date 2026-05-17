@@ -1,106 +1,89 @@
 \chapter{Requirement Specification}
 
-Requirement specification defines what the Secure File System must perform and the conditions under which it must operate. The project is designed as a secure web-based file sharing application where users can authenticate themselves, send encrypted files, receive stego images, and decrypt files intended for them. The requirements are classified into functional requirements, non-functional requirements, hardware requirements, and software requirements.
+Requirement specification defines what the QuantumHop Secure Multi-Hop Communication System must perform and the conditions under which it must operate. The project is designed as a peer-to-peer encrypted messaging platform where two or more laptops on a LAN exchange quantum-secured messages using raw TCP sockets, with real-time detection of network attacks. The requirements are classified into functional requirements, non-functional requirements, hardware requirements, and software requirements.
 
 \section{Specific Requirements}
 
-The Secure File System must support secure file transfer between predefined users through a browser-based interface. The system should protect the original file content using cryptographic techniques and hide the encrypted payload inside an image. It should also maintain the metadata required for file retrieval and decryption while keeping the workflow simple for the sender and receiver.
+The system must support direct message delivery between LAN peers using BB84-derived AES keys over raw TCP sockets. It must also detect and report Man-in-the-Middle, eavesdropping, and replay attacks without relying on any centralised server, cloud service, or pre-shared secret.
 
 \subsection{Functional Requirements}
 
-Functional requirements describe the services and operations that the system must provide. The major functional requirements of the Secure File System are listed below.
-
 \begin{enumerate}
-    \item \textbf{User Authentication:} The system shall allow only registered users to access the application. Authentication shall be performed using a challenge-response mechanism in which the application generates a random challenge and verifies the user response using a pre-shared secret.
+    \item \textbf{Peer Discovery:} The system shall automatically broadcast the machine name, IP address, and socket port over UDP to allow peers on the same LAN to discover one another without manual IP configuration.
 
-    \item \textbf{Session Management:} After successful login, the system shall maintain the authenticated user's session. The session shall be used to identify the active user while sending, receiving, decrypting, or deleting files.
+    \item \textbf{BB84 Key Exchange Simulation:} For every outgoing message, the system shall simulate the BB84 QKD protocol by generating Alice and Bob qubit streams, performing basis selection, measuring bits, sifting matching bases, and calculating an error rate.
 
-    \item \textbf{File Upload:} The sender shall be able to upload a file through the web interface. The uploaded file shall be stored temporarily in the sender's storage directory before encryption and embedding.
+    \item \textbf{Shared Key Derivation:} The sifted bits from the BB84 simulation shall be hashed using SHA-256 to produce a 256-bit AES key unique to each message transmission.
 
-    \item \textbf{Receiver Selection:} The sender shall be able to select the intended receiver from the list of available users. The system shall prevent the sender from selecting invalid receiver information.
+    \item \textbf{AES-256-CBC Encryption:} The message payload shall be encrypted using AES-256-CBC with the BB84-derived key and a randomly generated 16-byte IV before transmission over the socket.
 
-    \item \textbf{Metadata Addition:} Before encryption, the system shall attach metadata such as the original filename to the file data. This is required so that the receiver can recover the file with its original name after decryption.
+    \item \textbf{Raw TCP Socket Transmission:} The sender shall establish a direct TCP socket connection to the target peer's IP and port, transmit the encrypted JSON envelope, and receive a JSON response containing decryption status and error rate.
 
-    \item \textbf{AES File Encryption:} The system shall encrypt the uploaded file data using AES-GCM. This shall provide confidentiality for the file content and integrity verification during decryption.
+    \item \textbf{Direct Mode:} In direct mode the encrypted envelope shall be sent directly from sender to receiver with no intermediate nodes and an expected BB84 error rate near zero.
 
-    \item \textbf{RSA Key Protection:} The AES key generated during encryption shall be protected using RSA encryption. This forms a hybrid encryption approach where AES protects the file and RSA protects the AES key.
+    \item \textbf{Eavesdrop Attack Mode:} In eavesdrop mode the system shall inject random basis errors into the BB84 simulation, raising the error rate above the detection threshold, causing the receiver to block the message.
 
-    \item \textbf{Payload Creation:} The system shall combine the RSA-encrypted AES key, nonce, authentication tag, and ciphertext into a single payload for embedding.
+    \item \textbf{MITM Relay Attack Mode:} In MITM mode the sender shall route the envelope through a relay node. The relay shall log the interception and forward the packet to the real receiver, which shall detect the relay IP and flag the message as a Man-in-the-Middle attack.
 
-    \item \textbf{Steganographic Embedding:} The encrypted payload shall be embedded into a cover image using Least Significant Bit based steganography. The embedding process shall use pseudo-random pixel positions generated from a seed value.
+    \item \textbf{Replay Attack Mode:} In replay mode the sender shall re-transmit a previously used nonce. The receiver shall compare the nonce against a time-bound registry and reject any duplicate.
 
-    \item \textbf{Metadata Storage:} The system shall store file transfer metadata in the SQLite database. The stored metadata shall include sender, receiver, stego image path, payload length, seed value, and private key information required by the prototype for decryption.
+    \item \textbf{Attack Detection and Blocking:} The receiver shall block any message flagged as an attack and store it in the inbox as a blocked entry with the attack type and error rate.
 
-    \item \textbf{Received File Listing:} The receiver shall be able to view the list of stego images received through the application. Each received file shall be displayed with options to decrypt or delete it.
+    \item \textbf{Inbox Management:} All received messages, whether successfully decrypted or blocked, shall be stored in the in-memory inbox and displayed in the dashboard with sender name, message content or block reason, error rate, and timestamp.
 
-    \item \textbf{Payload Extraction:} When the receiver selects the decrypt option, the system shall extract the hidden payload from the stego image using the stored payload length and seed value.
+    \item \textbf{Dashboard --- Real Network Tab:} The dashboard shall display a list of discovered network peers, a message composition panel with target peer and mode selection, and an inbox panel showing all received messages.
 
-    \item \textbf{File Decryption:} The system shall decrypt the AES key using RSA and then decrypt the ciphertext using AES-GCM. If the tag verification fails or the payload is corrupted, the system shall report decryption failure.
+    \item \textbf{Dashboard --- Local Simulation Tab:} The dashboard shall provide an interactive local simulation where the user can select attack modes, run BB84 simulations, and observe the node-by-node packet flow, basis tables, and AES previews without a second machine.
 
-    \item \textbf{File Recovery:} After successful decryption, the system shall separate the metadata from the original file data, recover the original filename, and save the decrypted file in the output directory.
+    \item \textbf{Security Event Logging:} Every significant event, including BB84 completion, AES encryption, socket transmission, and attack detection, shall be logged to an in-memory event store accessible via the dashboard.
 
-    \item \textbf{File Deletion:} The receiver shall be able to delete a received stego image and its corresponding database entry from the application.
-
-    \item \textbf{Logout:} The system shall provide a logout option that clears the user session and redirects the user to the login page.
+    \item \textbf{Clean Port Management:} The launcher script shall automatically terminate any processes occupying the required ports before starting the backend and frontend servers.
 \end{enumerate}
 
 \subsection{Non-Functional Requirements}
 
-Non-functional requirements define the quality attributes and operating constraints of the system. The important non-functional requirements are as follows.
-
 \begin{enumerate}
-    \item \textbf{Security:} The system shall provide layered security through challenge-response authentication, AES-GCM encryption, RSA key protection, and image steganography.
+    \item \textbf{Security:} The system shall provide layered security through BB84 error rate monitoring, AES-256-CBC encryption, nonce-based replay prevention, and relay path detection.
 
-    \item \textbf{Confidentiality:} The original file content shall not be stored or transmitted in plain readable form after encryption. Unauthorized users should not be able to understand the file content from the stego image.
+    \item \textbf{Confidentiality:} Message content shall never be transmitted in plaintext. All payloads shall be AES-encrypted before socket transmission.
 
-    \item \textbf{Integrity:} The system shall use AES-GCM authentication tag verification to detect incorrect keys, corrupted ciphertext, or modified payload data during decryption.
+    \item \textbf{Integrity:} The nonce and timestamp in each envelope shall allow the receiver to detect tampered or replayed packets.
 
-    \item \textbf{Usability:} The application shall provide a simple web interface for login, sending files, viewing received files, decrypting files, and deleting files. The workflow should be understandable for users with basic computer knowledge.
+    \item \textbf{Availability:} The system shall remain operational for peer discovery and message reception continuously while the launcher script is running.
 
-    \item \textbf{Performance:} Encryption, embedding, extraction, and decryption operations should complete within a reasonable time for small and medium-sized files used in the prototype. The system shall display process logs to show the progress of each security operation.
+    \item \textbf{Usability:} The dashboard interface shall be operable without technical knowledge of cryptography. All attack modes shall be selectable from a dropdown, and results shall be displayed with plain-language explanations.
 
-    \item \textbf{Reliability:} The system shall maintain correct metadata for every transferred file so that the receiver can extract and decrypt the payload successfully. Database entries and stored files should remain synchronized during send and delete operations.
+    \item \textbf{Performance:} BB84 simulation, AES encryption, and socket transmission shall complete within two seconds for a typical short message on a standard LAN.
 
-    \item \textbf{Maintainability:} The application shall be organized into separate modules for routes, database operations, AES encryption, RSA encryption, steganography, and utility functions. This modular structure makes the system easier to modify and extend.
+    \item \textbf{Reliability:} The socket server shall handle connection errors, malformed envelopes, and handler exceptions gracefully, always returning a valid JSON error response rather than crashing silently.
 
-    \item \textbf{Portability:} The system shall be executable on common desktop or laptop systems that support Python, Flask, SQLite, OpenCV, NumPy, and PyCryptodome.
+    \item \textbf{Maintainability:} The backend shall be organised into separate modules: \texttt{bb84.py}, \texttt{crypto\_utils.py}, \texttt{peer\_socket.py}, \texttt{peer\_discovery.py}, \texttt{inbox.py}, \texttt{logger.py}, \texttt{attack\_detector.py}, and \texttt{config.py}.
 
-    \item \textbf{Scalability:} The prototype shall support extension to more users, additional file formats, larger cover images, and improved key management in future versions.
+    \item \textbf{Portability:} The system shall run on Windows, Linux, and macOS with Python 3.10 or higher and Node.js 18 or higher.
 
-    \item \textbf{Error Handling:} The system shall report login failure, payload extraction failure, and decryption failure clearly so that the user can identify unsuccessful operations.
+    \item \textbf{Scalability:} The peer discovery mechanism shall support any number of LAN peers, and the socket server shall handle simultaneous connections using a thread-per-connection model.
 \end{enumerate}
 
 \section{Technical Requirements}
 
-The technical requirements specify the hardware and software resources needed to develop and execute the Secure File System. Since the project is a web-based prototype, it can be developed and tested on a standard computer system.
-
 \subsection{Hardware Requirements}
 
-The recommended hardware requirements for development and testing are listed below.
-
 \begin{itemize}
-    \item Processor: Intel Core i3 or higher, or an equivalent processor.
-    \item RAM: Minimum 4 GB; 8 GB recommended for smoother execution.
-    \item Storage: Minimum 1 GB free disk space for project files, uploaded files, stego images, decrypted files, and database storage.
-    \item Display: Standard monitor with browser support for accessing the web interface.
-    \item Input Devices: Keyboard and mouse for user interaction.
-    \item Network: Localhost execution is sufficient for prototype testing; network connectivity is required only if the application is deployed for multi-system access.
+    \item \textbf{Machines:} Minimum two laptops or desktop computers for the two-machine demonstration. One machine can be used for the local simulation mode.
+    \item \textbf{Processor:} Intel Core i3 or equivalent, capable of running Python and a Node.js development server simultaneously.
+    \item \textbf{RAM:} Minimum 4 GB; 8 GB recommended.
+    \item \textbf{Network:} Both machines must be connected to the same Wi-Fi network, mobile hotspot, or wired LAN segment. Ports 5000 (TCP), 5010 (TCP), and 5555 (UDP) must be open in the firewall.
+    \item \textbf{Storage:} Minimum 500 MB free disk space for project files and Node.js dependencies.
 \end{itemize}
 
 \subsection{Software Requirements}
 
-The software requirements for the Secure File System are listed below.
-
 \begin{itemize}
-    \item Operating System: Windows, Linux, or macOS with Python support.
-    \item Programming Language: Python 3.
-    \item Web Framework: Flask for routing, templates, sessions, and web application handling.
-    \item Database: SQLite for storing file transfer metadata.
-    \item Cryptography Library: PyCryptodome for AES-GCM encryption, RSA key generation, RSA encryption, and RSA decryption.
-    \item Image Processing Libraries: OpenCV and NumPy for image reading, writing, flattening, random pixel selection, payload embedding, and payload extraction.
-    \item Front-End Technologies: HTML, CSS, and JavaScript for the user interface.
-    \item Browser: Any modern web browser such as Google Chrome, Microsoft Edge, Mozilla Firefox, or Safari.
-    \item Development Tools: A code editor such as Visual Studio Code and a terminal or command prompt for running the Flask application.
+    \item \textbf{Operating System:} Windows 10/11, Ubuntu 20.04+, or macOS 12+.
+    \item \textbf{Python:} Version 3.10 or higher with \texttt{pip} for dependency management.
+    \item \textbf{Python Libraries:} \texttt{flask}, \texttt{flask-cors}, \texttt{cryptography} (for AES-256-CBC), \texttt{requests}.
+    \item \textbf{Node.js:} Version 18 or higher with \texttt{npm} for the Vite/React frontend.
+    \item \textbf{Frontend Framework:} React 18 with Vite build tool.
+    \item \textbf{Browser:} Any modern browser such as Google Chrome, Microsoft Edge, or Mozilla Firefox.
+    \item \textbf{Development Tools:} Visual Studio Code or any Python/JavaScript IDE, and a terminal or PowerShell for running the launcher script.
 \end{itemize}
-
-The above requirements are sufficient to execute the current prototype and verify the complete workflow from authentication to secure file recovery. These requirements can be enhanced in future versions if the application is deployed on a server or extended for real-time multi-user usage.

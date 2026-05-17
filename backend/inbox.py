@@ -20,6 +20,7 @@ def add_message(
     relay_name: str = "",
     relay_ip: str = "",
     bb84_details: dict | None = None,
+    route_steps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Store a received message with its security metadata."""
     msg = {
@@ -33,6 +34,7 @@ def add_message(
         "relayName": relay_name,
         "relayIp": relay_ip,
         "bb84Details": bb84_details or {},
+        "routeSteps": route_steps or [],
         "receivedAt": time.time(),
         "receivedAtISO": time.strftime("%Y-%m-%dT%H:%M:%S"),
     }

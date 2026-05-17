@@ -8,7 +8,7 @@
 \begin{center}
 	\Large\textbf{RV College of Engineering\textsuperscript{\small\textregistered}, Bengaluru} \\[-0.5em]
 	\large{(\textit{Autonomous institution affiliated to VTU, Belagavi})} \\[-0.5em]
-	\ifIDP \else\large\textbf{Department of \ifIDP \printGuideDeptAInLF\else\printDepartmentLF\fi}\fi
+	\ifIDP \else\large\textbf{Department of \ifIDP \printGuideDeptAInLF\else\printDepartmentLF\fi}\fi \\
 	\vspace{0.5cm}
 	\includegraphics[width=4cm]{Figures/RV_logoVec}\\
 	\Large\textbf{\underline{CERTIFICATE}} \par
@@ -88,16 +88,16 @@
 \vspace{1cm}
 \begin{table}[H]
 \centering
-\resizebox{1\textwidth}{!}{%
-\begin{tabular}{ccc}
-	\Large &&\\
-		& &\\
-	\large Guide &\large Head of the Department &\large Principal\\
-	& &\\
-	\large\printGuideNameA & \large\printHOD & \large\printPrincipal\\
-	& & \\
-\end{tabular}%
-}
+\begin{tabular*}{\textwidth}{@{}l@{\extracolsep{\fill}}r@{}}
+	\Large &\\
+		& \\
+
+	\large\textbf{\printGuideNameA} & \large\textbf{\printHOD} \\
+	\large\printGuideDesigA & \large Head of the Department \\
+	\large Department of ISE, & \large Department of ISE, \\
+	\large RVCE, Bengaluru-59 & \large RVCE, Bengaluru-59 \\
+	& \\
+\end{tabular*}
 \end{table}
 \fi % \ifIDP
 %\fi % \ifINT

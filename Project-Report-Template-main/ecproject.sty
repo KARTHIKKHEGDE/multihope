@@ -289,33 +289,30 @@
   \draw[line width = 4pt] ($(current page.north west) + (0.75in,-0.75in)$) rectangle ($(current page.south east) + (-0.75in,0.75in)$);
 \end{tikzpicture}
 
-\ifIDP
-  \begin{tikzpicture}[remember picture, overlay]
-    \node[anchor=south east,inner sep=0, fill=white] (image) at ($(current page.south east) + (-0.8in,0.8in)$) {\fbox{\qrcode[hyperlink,height=1.75cm]{\@qrurl}}};
-  \end{tikzpicture}
-\else
-  \begin{tikzpicture}[remember picture, overlay]
-    \node[anchor=north east,inner sep=0, fill=white] (image) at ($(current page.north east) + (-0.15in,-0.15in)$) {\fbox{\qrcode[hyperlink,height=1.75cm]{\@qrurl}}};
-  \end{tikzpicture}
-\fi
+% QR Code Removed
 
 \begin{center}
-\vspace{-1cm}
-{\includegraphics[width=1\textwidth]{Figures/RV_newLogo}\par}
-\vspace{1cm}
+
+{\Large \bfseries RV COLLEGE OF ENGINEERING\textsuperscript{\small\textregistered}\\
+BENGALURU-560059\\
+\large (Autonomous Institution Affiliated to VTU, Belagavi)\par}
+\vspace{0.75cm}
+{\includegraphics[width=0.25\textwidth]{Figures/RV_logoVec}\par}
+\vspace{0.75cm}
 %\ifINT{\Large\itshape Summer Internship Report\par on\par}\fi %Intern
 {\huge\bfseries\@title\unskip\strut\par \global\titlelines=\the\prevgraf}% To count the number of lines used in the title - to adjust the spacing of title page
 \setcounter{numtitlelines}{\the\titlelines}
 \ifIDP\vspace{1cm}\else\ifGuideNameCUsed\vspace{0.5cm}\fi\fi
-{\Large\itshape \ifINT \vspace{0.5cm} An Internship \else\ifMinor A Minor Project \else \ifDTL A Design Thinking Lab \else \ifIDP An Interdisciplinary Project \else A Major Project \fi\fi\fi\fi  Report\;(\@subCode)\unskip\strut\par}
+{\Large\itshape \ifINT \vspace{0.5cm} An Internship Report \else\ifMinor Cryptography and Network Security Laboratory Project\\(IS362IA) \else \ifDTL A Design Thinking Lab Report \else \ifIDP An Interdisciplinary Project Report \else A Major Project Report \fi\fi\fi\fi\unskip\strut\par}
 % \fi
-\vspace{0.25cm}
-{\Large\bfseries \vspace{0.5cm} Submitted by,\unskip\strut\par}
+\vfill
+{\Large\bfseries Submitted by,\unskip\strut\par}
 \end{center}
 \fi % Draft
 
-{\noindent\large\bfseries\@stuNameA\unskip\strut}\hfill{\large\bfseries\@stuUSNA\unskip\strut\par}
-\ifIDP\vspace{0.125cm}\else\vspace{0.25cm}\fi
+\vspace{0.1cm}
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameA}\hspace{1cm}{\normalsize\bfseries\@stuUSNA}\hspace*{\fill}\par}
+\ifIDP\vspace{0.125cm}\else\vspace{0.2cm}\fi
 % Ver 3.9:
 %\ifINT
 %\vspace{0.5cm}
@@ -323,17 +320,17 @@
 \ifPG
 \vspace{0.5cm}
 \else
-{\noindent\large\bfseries\@stuNameB\unskip\strut}\hfill{\large\bfseries\@stuUSNB\unskip\strut\par}
-\ifIDP\vspace{0.125cm}\else\vspace{0.25cm}\fi
-{\noindent\large\bfseries\@stuNameC\unskip\strut}\hfill{\large\bfseries\@stuUSNC\unskip\strut\par}
-\ifIDP\vspace{0.125cm}\else\vspace{0.25cm}\fi
-{\noindent\large\bfseries\@stuNameD\unskip\strut}\hfill{\large\bfseries\@stuUSND\unskip\strut\par}
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameB}\hspace{1cm}{\normalsize\bfseries\@stuUSNB}\hspace*{\fill}\par}
+\ifIDP\vspace{0.125cm}\else\vspace{0.2cm}\fi
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameC}\hspace{1cm}{\large\bfseries\@stuUSNC}\hspace*{\fill}\par}
+\ifIDP\vspace{0.125cm}\else\vspace{0.2cm}\fi
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameD}\hspace{1cm}{\large\bfseries\@stuUSND}\hspace*{\fill}\par}
 % Ver 3.8: 
 \ifIDP
 \vspace{0.125cm}
-{\noindent\large\bfseries\@stuNameE\unskip\strut}\hfill{\large\bfseries\@stuUSNE\unskip\strut\par}
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameE}\hspace{1cm}{\large\bfseries\@stuUSNE}\hspace*{\fill}\par}
 \vspace{0.125cm}
-{\noindent\large\bfseries\@stuNameF\unskip\strut}\hfill{\large\bfseries\@stuUSNF\unskip\strut\par}
+{\noindent\hspace*{\fill}{\large\bfseries\@stuNameF}\hspace{1cm}{\large\bfseries\@stuUSNF}\hspace*{\fill}\par}
 \fi
 \fi
 %\fi % Intern
@@ -362,21 +359,19 @@
 \else
 \ifGuideNameCUsed
 	\ifnum\value{numtitlelines}>2 %Hope this vl fix the issue.
-		{\vspace{0.125cm}}
+		{\vspace{0.1cm}}
 	\else
-		{\vspace{0.5cm}}
+		{\vspace{0.2cm}}
 	\fi
 \else
-\vspace{1cm}
+\vspace{0.5cm}
 \fi
 \fi
 
-\begin{center}
-{\Large\bfseries Under the guidance of \unskip\strut\par}
-\end{center}
+{\centering \Large\bfseries Under the guidance of \unskip\strut\par}
 \ifDTL
   % Don't Add Guide B and C
-  \begin{center}
+  {\centering
   {\large\bfseries\@guideNameA\unskip\strut\par}
   \vspace{0.1cm}
   {\large\@guideDesigA\unskip\strut\par}
@@ -384,7 +379,7 @@
   {\large Dept. of\space\@guideDeptAInSF\unskip\strut\par}
   \vspace{0.1cm}
   {\large\@guideOrgA\textsuperscript{\small\textregistered}\unskip\strut\par}
-  \end{center}
+  \par}
 \else
   \ifIDP
     % Don't Add Guide B and C
@@ -436,8 +431,8 @@
   }\fi%\ifIDP
 \fi%\ifDTL
 \fi%\ifINT
-\par.
-\ifINT\vspace{3cm}\else\ifIDP\vspace{1cm}\else\ifGuideNameCUsed\vspace{1cm}\else\vspace{3cm}\fi\fi\fi
+\par
+\vfill
 \begin{center}% May be try use \vbox cmd for equal spacing, but I need to know the better location (lower)
 {\large\bfseries In partial fulfillment of the requirements for the degree of \par}
 \vspace{0.25cm}
@@ -481,7 +476,7 @@
     \fancyfoot[L] {\ifPG PG\else UG\fi\space Internship Report} 
     \fancyfoot[C] {Department of \@departmentSF, \@acadYear}% 
     \else
-    \fancyfoot[L] {\ifMinor UG Minor Project \else \ifDTL Design Thinking Lab \else UG Major Project \fi\fi Report}%
+    \fancyfoot[L] {\ifMinor UG CNS Project \else \ifDTL Design Thinking Lab \else UG Major Project \fi\fi Report}%
     %\fancyfoot[C] {Department of \@departmentSF \ifIDP \\\@acadYear\else \ifDTL \\\@acadYear\else ,\@acadYear\fi\fi}%
     \fancyfoot[C] {\ifDTL \hspace{2cm}\else \fi Department of \@departmentSF, \@acadYear}%
     \fi
@@ -512,7 +507,7 @@
     \fancyfoot[C] {\@mastersInSF\, in \@PGprgName, Department of \@departmentSF,\space\@acadYear}%
     \fancyfoot[R] {}%
     \else
-    \fancyfoot[L] {\ifMinor UG Minor Project \else \ifIDP Interdisciplinary Project \else \ifDTL Design Thinking Lab \else \ifINT UG Internship \else UG Major Project \fi\fi\fi\fi  Report}%
+    \fancyfoot[L] {\ifMinor UG CNS Project \else \ifIDP Interdisciplinary Project \else \ifDTL Design Thinking Lab \else \ifINT UG Internship \else UG Major Project \fi\fi\fi\fi  Report}%
     \fancyfoot[C] {\ifIDP \else Department of \@departmentSF\fi}%
     \fancyfoot[R] {\@acadYear}%
     \fi

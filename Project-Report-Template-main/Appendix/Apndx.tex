@@ -1,9 +1,123 @@
 \chapter{Code Snippets}
 
-\section{Code Snippets}
-Add important code snippets here.
+\section{BB84 Key Exchange --- Core Function}
+
+The following code shows the \texttt{establish\_key()} function that drives the quantum-inspired key distribution in the QuantumHop system.
+
+\begin{verbatim}
+def establish_key(
+    requested_key_bits: int = config.BB84_KEY_BITS,
+    threshold: float = config.ERROR_THRESHOLD,
+    eavesdrop: bool = False,
+    bit_flip_rate: float = 0.0,
+) -> BB84Result:
+    rounds = max(requested_key_bits * 4, config.BB84_SAMPLE_SIZE * 4)
+    alice_bits  = generate_bits(rounds)
+    alice_bases = generate_bases(rounds)
+    bob_bases   = generate_bases(rounds)
+    bob_bits = measure_bits(
+        alice_bits, alice_bases, bob_bases,
+        eavesdrop=eavesdrop, bit_flip_rate=bit_flip_rate
+    )
+    alice_sifted, bob_sifted = sift_key(
+        alice_bits, bob_bits, alice_bases, bob_bases
+    )
+    compared_bits = min(config.BB84_SAMPLE_SIZE, len(alice_sifted))
+    error_rate = calculate_error_rate(
+        alice_sifted, bob_sifted, compared_bits
+    )
+    key_material = bob_sifted[compared_bits:] or bob_sifted
+    return BB84Result(
+        key=derive_key(key_material),
+        error_rate=error_rate,
+        accepted=error_rate <= threshold,
+        ...
+    )
+\end{verbatim}
+
+\section{Raw TCP Socket --- Send Envelope}
+
+\begin{verbatim}
+def _send_envelope(host: str, port: int, envelope: dict) -> dict:
+    with socket.create_connection(
+        (host, port), timeout=config.SOCKET_TIMEOUT_SECONDS
+    ) as sock:
+        data = json.dumps(envelope).encode("utf-8")
+        sock.sendall(data)
+        sock.shutdown(socket.SHUT_WR)
+        chunks = []
+        while True:
+            chunk = sock.recv(config.SOCKET_BUFFER_SIZE)
+            if not chunk:
+                break
+            chunks.append(chunk)
+    return json.loads(b"".join(chunks).decode("utf-8"))
+\end{verbatim}
+
+\section{Attack Detection --- Handle Message}
+
+\begin{verbatim}
+nonce_result = attack_detector.register_nonce(nonce)
+attack_detected = False
+attack_type = ""
+
+if not nonce_result.ok:
+    attack_detected = True
+    attack_type = "Replay Attack - duplicate nonce detected"
+elif is_mitm:
+    attack_detected = True
+    attack_type = "Man-in-the-Middle - packet relayed through attacker"
+elif attack_detector.is_error_rate_attack(error_rate):
+    attack_detected = True
+    attack_type = (
+        f"Eavesdropping - BB84 error rate "
+        f"{round(error_rate * 100)}% exceeded "
+        f"{round(config.ERROR_THRESHOLD * 100)}% threshold"
+    )
+\end{verbatim}
 
 \chapter{Screenshots}
 
-\section{Screenshots}
-Add relevant screenshots of the project output, interface, or simulation results here.
+\section{Real Network Dashboard}
+
+Figure~\ref{fig:appendix-dashboard} shows the QuantumHop dashboard in Real Network mode with a discovered peer and the inbox panel visible.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Figures/dashboard_real_network}
+\caption{QuantumHop Real Network Dashboard --- Live peer discovery and inbox}
+\label{fig:appendix-dashboard}
+\end{figure}
+
+\section{Local Simulation Dashboard}
+
+Figure~\ref{fig:appendix-local-sim} shows the dashboard in Local Simulation mode, displaying the step-by-step key exchange progress and the network topology diagram.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Figures/dashboard_local_simulation}
+\caption{QuantumHop Local Simulation Dashboard --- Topology and QKD progress}
+\label{fig:appendix-local-sim}
+\end{figure}
+
+\section{Man-in-the-Middle Attack Interception}
+
+Figure~\ref{fig:appendix-mitm-challenge} shows the interactive MITM challenge interface where users can guess the intercepted 256-bit key, along with the live server security logs.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Figures/mitm_challenge}
+\caption{Interactive MITM Challenge and Live Server Logs}
+\label{fig:appendix-mitm-challenge}
+\end{figure}
+
+\section{Cryptographic and Rekey Hop Details}
+
+Figure~\ref{fig:appendix-mitm-sifted} shows the full hop-by-hop cryptographic breakdown, including the BB84 basis matching table, AES decryption, and AES encryption steps.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{Figures/mitm_sifted_key}
+\caption{Step-by-step QKD Basis Sifting and AES Hop Transformations}
+\label{fig:appendix-mitm-sifted}
+\end{figure}
